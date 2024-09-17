@@ -24,6 +24,7 @@ import { disableScrolling } from '../../../util/scrollLock';
 import { REM } from '../../common/helpers/mediaDimensions';
 import renderText from '../../common/helpers/renderText';
 import { getMessageCopyOptions } from './helpers/copyOptions';
+import { getMessageSendToParentWindowOptions } from './helpers/sendContentOptions';
 
 import useAppLayout from '../../../hooks/useAppLayout';
 import useFlag from '../../../hooks/useFlag';
@@ -284,6 +285,15 @@ const MessageContextMenu: FC<OwnProps> = ({
       onCopyNumber,
     );
 
+  const sendOptions = isSponsoredMessage
+    ? []
+    : getMessageSendToParentWindowOptions(
+      message,
+      canCopy,
+      handleAfterCopy,
+      onCopyMessages,
+    );
+
   const getTriggerElement = useLastCallback(() => {
     return isSponsoredMessage
       ? document.querySelector('.Transition_slide-active > .MessageList .SponsoredMessage')
@@ -402,6 +412,15 @@ const MessageContextMenu: FC<OwnProps> = ({
         {canSelectLanguage && (
           <MenuItem icon="web" onClick={onSelectLanguage}>{lang('lng_settings_change_lang')}</MenuItem>
         )}
+        {sendOptions.map((option) => (
+          <MenuItem
+            key={option.label}
+            icon={option.icon}
+            onClick={option.handler}
+            withPreventDefaultOnMouseDown
+          >{option.label}
+          </MenuItem>
+        ))}
         {copyOptions.map((option) => (
           <MenuItem
             key={option.label}
