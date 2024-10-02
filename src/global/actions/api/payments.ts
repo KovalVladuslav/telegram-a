@@ -5,18 +5,20 @@ import { PaymentStep } from '../../../types';
 
 import { DEBUG_PAYMENT_SMART_GLOCAL } from '../../../config';
 import { getCurrentTabId } from '../../../util/establishMultitabRole';
-import { buildCollectionByKey } from '../../../util/iteratees';
 import * as langProvider from '../../../util/oldLangProvider';
 import { getStripeError } from '../../../util/payments/stripe';
 import { buildQueryString } from '../../../util/requestQuery';
 import { extractCurrentThemeParams } from '../../../util/themeStyle';
 import { callApi } from '../../../api/gramjs';
 import { isChatChannel, isChatSuperGroup } from '../../helpers';
-import { getRequestInputInvoice, getStarsTransactionFromGift } from '../../helpers/payments';
+import {
+  getPrizeStarsTransactionFromGiveaway,
+  getRequestInputInvoice,
+  getStarsTransactionFromGift,
+} from '../../helpers/payments';
 import { addActionHandler, getGlobal, setGlobal } from '../../index';
 import {
-  addChats,
-  addUsers, appendStarsTransactions, closeInvoice,
+  appendStarsTransactions, closeInvoice,
   openStarsTransactionFromReceipt,
   openStarsTransactionModal,
   setInvoiceInfo, setPaymentForm,
@@ -105,12 +107,11 @@ async function getPaymentForm<T extends GlobalState>(
   }
 
   const {
-    form, invoice, users,
+    form, invoice,
   } = result;
 
   global = getGlobal();
 
-  global = addUsers(global, buildCollectionByKey(users, 'id'));
   global = setPaymentForm(global, form, tabId);
   global = setPaymentStep(global, PaymentStep.Checkout, tabId);
   setGlobal(global);
@@ -133,7 +134,6 @@ addActionHandler('getReceipt', async (global, actions, payload): Promise<void> =
   }
 
   global = getGlobal();
-  global = addUsers(global, buildCollectionByKey(result.users, 'id'));
   if (result.receipt.type === 'stars') {
     global = openStarsTransactionFromReceipt(global, result.receipt, tabId);
   } else {
@@ -430,7 +430,6 @@ addActionHandler('openPremiumModal', async (global, actions, payload): Promise<v
   if (!result) return;
 
   global = getGlobal();
-  global = addUsers(global, buildCollectionByKey(result.users, 'id'));
 
   global = updateTabState(global, {
     premiumModal: {
@@ -462,11 +461,11 @@ addActionHandler('openGiveawayModal', async (global, actions, payload): Promise<
     chat,
   });
 
-  if (!result) {
+  const starOptions = await callApi('fetchStarsGiveawayOptions');
+
+  if (!result || !starOptions) {
     return;
   }
-
-  global = getGlobal();
 
   const isOpen = Boolean(chatId);
 
@@ -476,6 +475,7 @@ addActionHandler('openGiveawayModal', async (global, actions, payload): Promise<
       gifts: result,
       isOpen,
       prepaidGiveaway,
+      starOptions,
     },
   }, tabId);
   setGlobal(global);
@@ -551,6 +551,22 @@ addActionHandler('openStarsTransactionFromGift', (global, actions, payload): Act
   return openStarsTransactionModal(global, transaction, tabId);
 });
 
+addActionHandler('openPrizeStarsTransactionFromGiveaway', (global, actions, payload): ActionReturnType => {
+  const {
+    chatId,
+    messageId,
+    tabId = getCurrentTabId(),
+  } = payload || {};
+
+  const message = selectChatMessage(global, chatId, messageId);
+  if (!message) return undefined;
+
+  const transaction = getPrizeStarsTransactionFromGiveaway(message);
+  if (!transaction) return undefined;
+
+  return openStarsTransactionModal(global, transaction, tabId);
+});
+
 addActionHandler('openPremiumGiftModal', async (global, actions, payload): Promise<void> => {
   const {
     forUserIds, tabId = getCurrentTabId(),
@@ -559,7 +575,6 @@ addActionHandler('openPremiumGiftModal', async (global, actions, payload): Promi
   if (!result) return;
 
   global = getGlobal();
-  global = addUsers(global, buildCollectionByKey(result.users, 'id'));
 
   const gifts = await callApi('getPremiumGiftCodeOptions', {});
 
@@ -686,8 +701,6 @@ addActionHandler('openBoostModal', async (global, actions, payload): Promise<voi
   const tabState = selectTabState(global, tabId);
   if (!tabState.boostModal) return;
 
-  global = addChats(global, buildCollectionByKey(myBoosts.chats, 'id'));
-  global = addUsers(global, buildCollectionByKey(myBoosts.users, 'id'));
   global = updateTabState(global, {
     boostModal: {
       ...tabState.boostModal,
@@ -726,8 +739,6 @@ addActionHandler('openBoostStatistics', async (global, actions, payload): Promis
     return;
   }
 
-  const totalBoostUserList = [...boostListResult.users, ...boostListGiftResult.users];
-  global = addUsers(global, buildCollectionByKey(totalBoostUserList, 'id'));
   global = updateTabState(global, {
     boostStatistics: {
       chatId,
@@ -784,7 +795,6 @@ addActionHandler('loadMoreBoosters', async (global, actions, payload): Promise<v
   if (!result) return;
 
   global = getGlobal();
-  global = addUsers(global, buildCollectionByKey(result.users, 'id'));
 
   tabState = selectTabState(global, tabId);
   if (!tabState.boostStatistics) return;
@@ -895,8 +905,6 @@ addActionHandler('applyBoost', async (global, actions, payload): Promise<void> =
   }
 
   tabState = selectTabState(global, tabId);
-  global = addUsers(global, buildCollectionByKey(result.users, 'id'));
-  global = addChats(global, buildCollectionByKey(result.chats, 'id'));
   if (oldChatFullInfo) {
     global = updateChatFullInfo(global, chatId, {
       boostsApplied: oldBoostsApplied + slots.length,
@@ -930,8 +938,6 @@ addActionHandler('checkGiftCode', async (global, actions, payload): Promise<void
   }
 
   global = getGlobal();
-  global = addUsers(global, buildCollectionByKey(result.users, 'id'));
-  global = addChats(global, buildCollectionByKey(result.chats, 'id'));
   global = updateTabState(global, {
     giftCodeModal: {
       slug,
@@ -989,6 +995,41 @@ addActionHandler('launchPrepaidGiveaway', async (global, actions, payload): Prom
   actions.openBoostStatistics({ chatId, tabId });
 });
 
+addActionHandler('launchPrepaidStarsGiveaway', async (global, actions, payload): Promise<void> => {
+  const {
+    chatId, giveawayId, paymentPurpose, tabId = getCurrentTabId(),
+  } = payload;
+
+  const chat = selectChat(global, chatId);
+  if (!chat) return;
+
+  const additionalChannels = paymentPurpose?.additionalChannelIds?.map((id) => selectChat(global, id)).filter(Boolean);
+
+  const result = await callApi('launchPrepaidGiveaway', {
+    chat,
+    giveawayId,
+    paymentPurpose: {
+      type: 'starsgiveaway',
+      chat,
+      areWinnersVisible: paymentPurpose?.areWinnersVisible,
+      additionalChannels,
+      countries: paymentPurpose?.countries,
+      prizeDescription: paymentPurpose.prizeDescription,
+      untilDate: paymentPurpose.untilDate,
+      currency: paymentPurpose.currency,
+      amount: paymentPurpose.amount,
+      stars: paymentPurpose.stars,
+      users: paymentPurpose.users,
+    },
+  });
+
+  if (!result) {
+    return;
+  }
+
+  actions.openBoostStatistics({ chatId, tabId });
+});
+
 addActionHandler('loadStarStatus', async (global): Promise<void> => {
   const currentStatus = global.stars;
   const needsTopupOptions = !currentStatus?.topupOptions;
@@ -1003,8 +1044,6 @@ addActionHandler('loadStarStatus', async (global): Promise<void> => {
   }
 
   global = getGlobal();
-  global = addChats(global, buildCollectionByKey(status.chats, 'id'));
-  global = addUsers(global, buildCollectionByKey(status.users, 'id'));
 
   global = {
     ...global,
@@ -1043,8 +1082,6 @@ addActionHandler('loadStarsTransactions', async (global, actions, payload): Prom
   }
 
   global = getGlobal();
-  global = addChats(global, buildCollectionByKey(result.chats, 'id'));
-  global = addUsers(global, buildCollectionByKey(result.users, 'id'));
 
   global = updateStarsBalance(global, result.balance);
   if (result.history) {

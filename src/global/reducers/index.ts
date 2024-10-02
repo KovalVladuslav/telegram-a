@@ -12,4 +12,6 @@ export * from './payments';
 export * from './statistics';
 export * from './stories';
 export * from './translations';
-export * from './general';
+export * from './peers';
+export * from './password';
+export * from './topics';

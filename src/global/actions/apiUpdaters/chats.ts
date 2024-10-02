@@ -16,6 +16,8 @@ import {
   deletePeerPhoto,
   leaveChat,
   removeUnreadMentions,
+  replacePeerPhotos,
+  replacePinnedTopicIds,
   replaceThreadParam,
   updateChat,
   updateChatFullInfo,
@@ -45,7 +47,8 @@ const TYPING_STATUS_CLEAR_DELAY = 6000; // 6 seconds
 addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
   switch (update['@type']) {
     case 'updateChat': {
-      const { isForum: prevIsForum, lastReadOutboxMessageId } = selectChat(global, update.id) || {};
+      const localChat = selectChat(global, update.id);
+      const { isForum: prevIsForum, lastReadOutboxMessageId } = localChat || {};
 
       if (update.chat.lastReadOutboxMessageId && lastReadOutboxMessageId
         && update.chat.lastReadOutboxMessageId < lastReadOutboxMessageId) {
@@ -55,8 +58,6 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
         };
       }
 
-      const localChat = selectChat(global, update.id);
-
       global = updateChat(global, update.id, update.chat);
 
       if (localChat?.areStoriesHidden !== update.chat.areStoriesHidden) {
@@ -65,8 +66,10 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
 
       setGlobal(global);
 
-      if (!update.noTopChatsRequest && !selectIsChatListed(global, update.id)) {
-        // Chat can appear in dialogs list.
+      const updatedChat = selectChat(global, update.id);
+      if (!update.noTopChatsRequest && updatedChat && !selectIsChatListed(global, update.id)
+          && !updatedChat.isNotJoined) {
+        // Reload top chats to update chat listing
         actions.loadTopChats();
       }
 
@@ -480,9 +483,7 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
       const chat = global.chats.byId[chatId];
       if (!chat) return undefined;
 
-      global = updateChat(global, chatId, {
-        orderedPinnedTopicIds: order,
-      });
+      global = replacePinnedTopicIds(global, chatId, order);
       setGlobal(global);
 
       return undefined;
@@ -547,8 +548,8 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
       if (!photoId || peer.avatarPhotoId === photoId) {
         global = updateChat(global, peerId, {
           avatarPhotoId: undefined,
-          profilePhotos: undefined,
         });
+        global = replacePeerPhotos(global, peerId, undefined);
       } else {
         global = deletePeerPhoto(global, peerId, photoId);
       }

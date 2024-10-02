@@ -5,11 +5,9 @@ import arePropsShallowEqual, { logUnequalProps } from '../../util/arePropsShallo
 import { handleError } from '../../util/handleError';
 import { orderBy } from '../../util/iteratees';
 import { throttleWithTickEnd } from '../../util/schedulers';
-import { requestMeasure } from '../fasterdom/fasterdom';
-import React, { DEBUG_resolveComponentName, useEffect } from './teact';
+import React, { DEBUG_resolveComponentName, getIsHeavyAnimating, useUnmountCleanup } from './teact';
 
 import useForceUpdate from '../../hooks/useForceUpdate';
-import { isHeavyAnimating } from '../../hooks/useHeavyAnimationCheck';
 import useUniqueId from '../../hooks/useUniqueId';
 
 export default React;
@@ -75,8 +73,8 @@ let forceOnHeavyAnimation = true;
 function runCallbacks() {
   if (forceOnHeavyAnimation) {
     forceOnHeavyAnimation = false;
-  } else if (isHeavyAnimating()) {
-    requestMeasure(runCallbacksThrottled);
+  } else if (getIsHeavyAnimating()) {
+    getIsHeavyAnimating.once(runCallbacksThrottled);
     return;
   }
 
@@ -256,11 +254,9 @@ export function withGlobal<OwnProps extends AnyLiteral>(
       const id = useUniqueId();
       const forceUpdate = useForceUpdate();
 
-      useEffect(() => {
-        return () => {
-          containers.delete(id);
-        };
-      }, [id]);
+      useUnmountCleanup(() => {
+        containers.delete(id);
+      });
 
       let container = containers.get(id)!;
       if (!container) {

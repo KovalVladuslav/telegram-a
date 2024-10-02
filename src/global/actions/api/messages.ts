@@ -66,9 +66,7 @@ import {
 } from '../../index';
 import {
   addChatMessagesById,
-  addChats,
   addUnreadMentions,
-  addUsers,
   deleteSponsoredMessage,
   removeOutlyingList,
   removeRequestedMessageTranslation,
@@ -81,7 +79,6 @@ import {
   updateChat,
   updateChatFullInfo,
   updateChatMessage,
-  updateChats,
   updateListedIds,
   updateMessageTranslation,
   updateOutlyingLists,
@@ -95,7 +92,6 @@ import {
   updateTopic,
   updateUploadByMessageKey,
   updateUserFullInfo,
-  updateUsers,
 } from '../../reducers';
 import { updateTabState } from '../../reducers/tabs';
 import {
@@ -131,6 +127,7 @@ import {
   selectSponsoredMessage,
   selectTabState,
   selectThreadIdFromMessage,
+  selectTopic,
   selectTranslationLanguage,
   selectUser,
   selectUserFullInfo,
@@ -911,8 +908,8 @@ addActionHandler('markMessageListRead', (global, actions, payload): ActionReturn
     return global;
   }
 
-  if (chat.isForum && chat.topics?.[threadId]) {
-    const topic = chat.topics[threadId];
+  const topic = selectTopic(global, chatId, threadId);
+  if (chat.isForum && topic) {
     global = updateThreadInfo(global, chatId, threadId, {
       lastReadInboxMessageId: maxId,
     });
@@ -1013,9 +1010,6 @@ addActionHandler('loadPollOptionResults', async (global, actions, payload): Prom
   }
 
   global = getGlobal();
-
-  global = addUsers(global, buildCollectionByKey(result.users, 'id'));
-  global = addChats(global, buildCollectionByKey(result.chats, 'id'));
 
   const tabState = selectTabState(global, tabId);
   const { pollResults } = tabState;
@@ -1301,7 +1295,7 @@ async function loadViewportMessages<T extends GlobalState>(
   }
 
   const {
-    messages, users, chats, count,
+    messages, count,
   } = result;
 
   global = getGlobal();
@@ -1324,9 +1318,6 @@ async function loadViewportMessages<T extends GlobalState>(
   global = isOutlying
     ? updateOutlyingLists(global, chatId, threadId, ids)
     : updateListedIds(global, chatId, threadId, ids);
-
-  global = addUsers(global, buildCollectionByKey(users, 'id'));
-  global = addChats(global, buildCollectionByKey(chats, 'id'));
 
   let listedIds = selectListedIds(global, chatId, threadId);
   const outlyingList = offsetId ? selectOutlyingListByMessageId(global, chatId, threadId, offsetId) : undefined;
@@ -1382,7 +1373,6 @@ async function loadMessage<T extends GlobalState>(
 
   global = getGlobal();
   global = updateChatMessage(global, chat.id, messageId, result.message);
-  global = addUsers(global, buildCollectionByKey(result.users, 'id'));
   setGlobal(global);
 
   return result.message;
@@ -1498,7 +1488,7 @@ addActionHandler('loadPinnedMessages', async (global, actions, payload): Promise
     return;
   }
 
-  const { messages, chats, users } = result;
+  const { messages } = result;
 
   const byId = buildCollectionByKey(messages, 'id');
   const ids = Object.keys(byId).map(Number).sort((a, b) => b - a);
@@ -1506,8 +1496,6 @@ addActionHandler('loadPinnedMessages', async (global, actions, payload): Promise
   global = getGlobal();
   global = addChatMessagesById(global, chat.id, byId);
   global = safeReplacePinnedIds(global, chat.id, threadId, ids);
-  global = addUsers(global, buildCollectionByKey(users, 'id'));
-  global = addChats(global, buildCollectionByKey(chats, 'id'));
   setGlobal(global);
 });
 
@@ -1562,8 +1550,6 @@ addActionHandler('loadSendAs', async (global, actions, payload): Promise<void> =
   }
 
   global = getGlobal();
-  global = addUsers(global, buildCollectionByKey(result.users, 'id'));
-  global = addChats(global, buildCollectionByKey(result.chats, 'id'));
   global = updateChat(global, chatId, { sendAsPeerIds: result.sendAs });
   setGlobal(global);
 });
@@ -1582,8 +1568,6 @@ addActionHandler('loadSponsoredMessages', async (global, actions, payload): Prom
 
   global = getGlobal();
   global = updateSponsoredMessage(global, chatId, result.messages[0]);
-  global = addUsers(global, buildCollectionByKey(result.users, 'id'));
-  global = addChats(global, buildCollectionByKey(result.chats, 'id'));
   setGlobal(global);
 });
 
@@ -1599,14 +1583,16 @@ addActionHandler('viewSponsoredMessage', (global, actions, payload): ActionRetur
 });
 
 addActionHandler('clickSponsoredMessage', (global, actions, payload): ActionReturnType => {
-  const { chatId } = payload;
+  const { chatId, isMedia, isFullscreen } = payload;
   const chat = selectChat(global, chatId);
   const message = selectSponsoredMessage(global, chatId);
   if (!chat || !message) {
     return;
   }
 
-  void callApi('clickSponsoredMessage', { chat, random: message.randomId });
+  void callApi('clickSponsoredMessage', {
+    chat, random: message.randomId, isMedia, isFullscreen,
+  });
 });
 
 addActionHandler('reportSponsoredMessage', async (global, actions, payload): Promise<void> => {
@@ -1695,15 +1681,13 @@ async function fetchUnreadMentions<T extends GlobalState>(global: T, chatId: str
 
   if (!result) return;
 
-  const { messages, chats, users } = result;
+  const { messages } = result;
 
   const byId = buildCollectionByKey(messages, 'id');
   const ids = Object.keys(byId).map(Number);
 
   global = getGlobal();
   global = addChatMessagesById(global, chat.id, byId);
-  global = addUsers(global, buildCollectionByKey(users, 'id'));
-  global = addChats(global, buildCollectionByKey(chats, 'id'));
   global = addUnreadMentions(global, chatId, chat, ids);
 
   setGlobal(global);
@@ -2073,8 +2057,6 @@ addActionHandler('loadMessageViews', async (global, actions, payload): Promise<v
   if (!result) return;
 
   global = getGlobal();
-  global = addUsers(global, buildCollectionByKey(result.users, 'id'));
-  global = addChats(global, buildCollectionByKey(result.chats, 'id'));
   result.viewsInfo.forEach((update) => {
     global = updateChatMessage(global, chatId, update.id, {
       viewsCount: update.views,
@@ -2155,8 +2137,6 @@ addActionHandler('loadQuickReplies', async (global): Promise<void> => {
   if (!result) return;
 
   global = getGlobal();
-  global = updateUsers(global, buildCollectionByKey(result.users, 'id'));
-  global = updateChats(global, buildCollectionByKey(result.chats, 'id'));
   global = updateQuickReplyMessages(global, buildCollectionByKey(result.messages, 'id'));
   global = updateQuickReplies(global, result.quickReplies);
 

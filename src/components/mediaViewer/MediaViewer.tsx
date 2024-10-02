@@ -1,11 +1,16 @@
 import React, {
+  beginHeavyAnimation,
   memo, useEffect, useMemo, useRef,
 } from '../../lib/teact/teact';
 import { getActions, withGlobal } from '../../global';
 
 import type {
   ApiChat,
-  ApiMessage, ApiPeer, ApiPhoto,
+  ApiMessage,
+  ApiPeer,
+  ApiPeerPhotos,
+  ApiPhoto,
+  ApiSponsoredMessage,
 } from '../../api/types';
 import { type MediaViewerMedia, MediaViewerOrigin, type ThreadId } from '../../types';
 
@@ -24,8 +29,9 @@ import {
   selectListedIds,
   selectOutlyingListByMessageId,
   selectPeer,
+  selectPeerPhotos,
   selectPerformanceSettingsValue,
-  selectScheduledMessage,
+  selectScheduledMessage, selectSponsoredMessage,
   selectTabState,
 } from '../../global/selectors';
 import { stopCurrentAudio } from '../../util/audioPlayer';
@@ -40,7 +46,6 @@ import useAppLayout from '../../hooks/useAppLayout';
 import useElectronDrag from '../../hooks/useElectronDrag';
 import useFlag from '../../hooks/useFlag';
 import useForceUpdate from '../../hooks/useForceUpdate';
-import { dispatchHeavyAnimationEvent } from '../../hooks/useHeavyAnimationCheck';
 import useLastCallback from '../../hooks/useLastCallback';
 import useOldLang from '../../hooks/useOldLang';
 import { exitPictureInPictureIfNeeded, usePictureInPictureSignal } from '../../hooks/usePictureInPicture';
@@ -69,7 +74,9 @@ type StateProps = {
   origin?: MediaViewerOrigin;
   avatar?: ApiPhoto;
   avatarOwner?: ApiPeer;
+  profilePhotos?: ApiPeerPhotos;
   chatMessages?: Record<number, ApiMessage>;
+  sponsoredMessage?: ApiSponsoredMessage;
   standaloneMedia?: MediaViewerMedia[];
   mediaIndex?: number;
   isHidden?: boolean;
@@ -94,7 +101,9 @@ const MediaViewer = ({
   origin,
   avatar,
   avatarOwner,
+  profilePhotos,
   chatMessages,
+  sponsoredMessage,
   standaloneMedia,
   mediaIndex,
   withAnimation,
@@ -112,9 +121,11 @@ const MediaViewer = ({
     toggleChatInfo,
     searchChatMediaMessages,
     loadMoreProfilePhotos,
+    clickSponsoredMessage,
+    openUrl,
   } = getActions();
 
-  const isOpen = Boolean(avatarOwner || message || standaloneMedia);
+  const isOpen = Boolean(avatarOwner || message || standaloneMedia || sponsoredMessage);
   const { isMobile } = useAppLayout();
 
   /* Animation */
@@ -128,7 +139,7 @@ const MediaViewer = ({
   const [isReportModalOpen, openReportModal, closeReportModal] = useFlag();
 
   const currentItem = getMediaViewerItem({
-    message, avatarOwner, standaloneMedia, mediaIndex,
+    message, avatarOwner, standaloneMedia, profilePhotos, mediaIndex, sponsoredMessage,
   });
   const { media, isSingle } = getViewableMedia(currentItem) || {};
 
@@ -212,12 +223,12 @@ const MediaViewer = ({
 
   useEffect(() => {
     if (isGhostAnimation && isOpen && (shouldAnimateOpening || !prevItem)) {
-      dispatchHeavyAnimationEvent(ANIMATION_DURATION + ANIMATION_END_DELAY);
+      beginHeavyAnimation(ANIMATION_DURATION + ANIMATION_END_DELAY);
       animateOpening(hasFooter, origin!, bestImageData!, dimensions!, isVideo, message, mediaIndex);
     }
 
     if (isGhostAnimation && !isOpen && prevItem) {
-      dispatchHeavyAnimationEvent(ANIMATION_DURATION + ANIMATION_END_DELAY);
+      beginHeavyAnimation(ANIMATION_DURATION + ANIMATION_END_DELAY);
       animateClosing(prevOrigin!, prevBestImageData!, prevMessage, prevItem?.mediaIndex);
     }
   }, [
@@ -242,6 +253,14 @@ const MediaViewer = ({
     }
   });
 
+  const handleSponsoredClick = useLastCallback((isFromMedia?: boolean) => {
+    if (!sponsoredMessage || !chatId) return;
+
+    clickSponsoredMessage({ isMedia: isFromMedia, isFullscreen: true, chatId });
+    openUrl({ url: sponsoredMessage!.url });
+    closeMediaViewer();
+  });
+
   const handleForward = useLastCallback(() => {
     openForwardMenu({
       fromChatId: chatId!,
@@ -263,7 +282,7 @@ const MediaViewer = ({
     if (!item || isLoadingMoreMedia) return;
 
     if (item.type === 'avatar') {
-      const isNearEnd = item.mediaIndex >= item.avatarOwner.profilePhotos!.photos.length - AVATAR_LOAD_TRIGGER;
+      const isNearEnd = item.mediaIndex >= item.profilePhotos.photos.length - AVATAR_LOAD_TRIGGER;
       if (!isNearEnd) return;
       loadMoreProfilePhotos({ peerId: item.avatarOwner.id });
     }
@@ -287,10 +306,25 @@ const MediaViewer = ({
     }
 
     if (from.type === 'avatar') {
-      const { avatarOwner: fromAvatarOwner, mediaIndex: fromMediaIndex } = from;
+      const { avatarOwner: fromAvatarOwner, profilePhotos: fromProfilePhotos, mediaIndex: fromMediaIndex } = from;
       const nextIndex = fromMediaIndex + direction;
-      if (nextIndex >= 0 && fromAvatarOwner.profilePhotos && nextIndex < fromAvatarOwner.profilePhotos.photos.length) {
-        return { type: 'avatar', avatarOwner: fromAvatarOwner, mediaIndex: nextIndex };
+      if (nextIndex >= 0 && fromProfilePhotos && nextIndex < fromProfilePhotos.photos.length) {
+        return {
+          type: 'avatar',
+          avatarOwner: fromAvatarOwner,
+          profilePhotos: fromProfilePhotos,
+          mediaIndex: nextIndex,
+        };
+      }
+
+      return undefined;
+    }
+
+    if (from.type === 'sponsoredMessage') {
+      const { message: fromSponsoredMessage, mediaIndex: fromSponsoredMessageIndex } = from;
+      const nextIndex = fromSponsoredMessageIndex! + direction;
+      if (nextIndex >= 0 && fromSponsoredMessage) {
+        return { type: 'sponsoredMessage', message: fromSponsoredMessage, mediaIndex: nextIndex };
       }
 
       return undefined;
@@ -345,7 +379,7 @@ const MediaViewer = ({
   });
 
   const handleBeforeDelete = useLastCallback(() => {
-    const mediaCount = avatarOwner?.profilePhotos?.photos.length
+    const mediaCount = profilePhotos?.photos.length
       || standaloneMedia?.length || messageMediaIds?.length || 0;
     if (mediaCount <= 1 || !currentItem) {
       handleClose();
@@ -434,6 +468,7 @@ const MediaViewer = ({
         selectItem={openMediaViewerItem}
         isHidden={isHidden}
         onFooterClick={handleFooterClick}
+        handleSponsoredClick={handleSponsoredClick}
       />
     </ShowTransition>
   );
@@ -452,6 +487,7 @@ export default memo(withGlobal(
       standaloneMedia,
       mediaIndex,
       isAvatarView,
+      isSponsoredMessage,
     } = mediaViewer;
     const withAnimation = selectPerformanceSettingsValue(global, 'mediaViewerAnimations');
 
@@ -465,9 +501,10 @@ export default memo(withGlobal(
         canUpdateMedia = isUserId(peer.id) ? peer.id === currentUserId : isChatAdmin(peer as ApiChat);
       }
 
-      const profilePhotos = peer?.profilePhotos;
+      const profilePhotos = selectPeerPhotos(global, chatId!);
 
       return {
+        profilePhotos,
         avatar: profilePhotos?.photos[mediaIndex!],
         avatarOwner: peer,
         isLoadingMoreMedia: profilePhotos?.isLoading,
@@ -489,6 +526,13 @@ export default memo(withGlobal(
         message = selectScheduledMessage(global, chatId, messageId);
       } else {
         message = selectChatMessage(global, chatId, messageId);
+      }
+    }
+
+    let sponsoredMessage: ApiSponsoredMessage | undefined;
+    if (isSponsoredMessage && chatId) {
+      if (origin === MediaViewerOrigin.SponsoredMessage) {
+        sponsoredMessage = selectSponsoredMessage(global, chatId);
       }
     }
 
@@ -531,6 +575,7 @@ export default memo(withGlobal(
       origin,
       message,
       chatMessages,
+      sponsoredMessage,
       collectedMessageIds,
       withAnimation,
       isHidden,

@@ -2,11 +2,10 @@ import BigInt from 'big-integer';
 import { Api as GramJs } from '../../../lib/gramjs';
 
 import type {
-  ApiChat, ApiMessagePublicForward, ApiPostStatistics, ApiStoryPublicForward, ApiUser, StatisticsGraph,
+  ApiChat, ApiMessagePublicForward, ApiPostStatistics, ApiStoryPublicForward, StatisticsGraph,
 } from '../../types';
 
 import { STATISTICS_PUBLIC_FORWARDS_LIMIT } from '../../../config';
-import { buildApiChatFromPreview } from '../apiBuilders/chats';
 import {
   buildChannelMonetizationStatistics,
   buildChannelStatistics,
@@ -16,10 +15,9 @@ import {
   buildPostsStatistics,
   buildStoryPublicForwards,
 } from '../apiBuilders/statistics';
-import { buildApiUser } from '../apiBuilders/users';
 import { buildInputEntity, buildInputPeer } from '../gramjsBuilders';
-import { addEntitiesToLocalDb } from '../helpers';
 import { invokeRequest } from './client';
+import { getPassword, onPasswordError } from './twoFaSettings';
 
 export async function fetchChannelStatistics({
   chat, dcId,
@@ -69,10 +67,7 @@ export async function fetchGroupStatistics({
     return undefined;
   }
 
-  addEntitiesToLocalDb(result.users);
-
   return {
-    users: result.users.map(buildApiUser).filter(Boolean),
     stats: buildGroupStatistics(result),
   };
 }
@@ -114,8 +109,6 @@ export async function fetchMessagePublicForwards({
     forwards?: ApiMessagePublicForward[];
     count?: number;
     nextOffset?: string;
-    chats: ApiChat[];
-    users: ApiUser[];
   } | undefined> {
   const result = await invokeRequest(new GramJs.stats.GetMessagePublicForwards({
     channel: buildInputEntity(chat.id, chat.accessHash) as GramJs.InputChannel,
@@ -130,15 +123,10 @@ export async function fetchMessagePublicForwards({
     return undefined;
   }
 
-  addEntitiesToLocalDb(result.chats);
-  addEntitiesToLocalDb(result.users);
-
   return {
     forwards: buildMessagePublicForwards(result),
     count: result.count,
     nextOffset: result.nextOffset,
-    chats: result.chats.map((c) => buildApiChatFromPreview(c)).filter(Boolean),
-    users: result.users.map(buildApiUser).filter(Boolean),
   };
 }
 
@@ -202,8 +190,6 @@ export async function fetchStoryPublicForwards({
   offset?: string;
 }): Promise<{
     publicForwards: (ApiMessagePublicForward | ApiStoryPublicForward)[] | undefined;
-    users: ApiUser[];
-    chats: ApiChat[];
     count?: number;
     nextOffset?: string;
   } | undefined> {
@@ -220,14 +206,38 @@ export async function fetchStoryPublicForwards({
     return undefined;
   }
 
-  addEntitiesToLocalDb(result.chats);
-  addEntitiesToLocalDb(result.users);
-
   return {
     publicForwards: buildStoryPublicForwards(result),
-    users: result.users.map(buildApiUser).filter(Boolean),
-    chats: result.chats.map((c) => buildApiChatFromPreview(c)).filter(Boolean),
     count: result.count,
     nextOffset: result.nextOffset,
   };
+}
+
+export async function loadMonetizationRevenueWithdrawalUrl({
+  chat, currentPassword,
+}: { chat: ApiChat; currentPassword: string }) {
+  try {
+    const password = await getPassword(currentPassword);
+
+    if (!password || 'error' in password) {
+      return undefined;
+    }
+
+    const result = await invokeRequest(new GramJs.stats.GetBroadcastRevenueWithdrawalUrl({
+      channel: buildInputEntity(chat.id, chat.accessHash) as GramJs.InputChannel,
+      password,
+    }), {
+      shouldThrow: true,
+    });
+
+    if (!result) {
+      return undefined;
+    }
+
+    return result;
+  } catch (err: any) {
+    onPasswordError(err);
+  }
+
+  return undefined;
 }

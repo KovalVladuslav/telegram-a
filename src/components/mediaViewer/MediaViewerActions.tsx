@@ -110,7 +110,8 @@ const MediaViewerActions: FC<OwnProps & StateProps> = ({
     if (isDownloading) {
       cancelMediaDownload({ media });
     } else {
-      downloadMedia({ media });
+      const message = item?.type === 'message' ? item.message : undefined;
+      downloadMedia({ media, originMessage: message });
     }
   });
 
@@ -128,8 +129,8 @@ const MediaViewerActions: FC<OwnProps & StateProps> = ({
 
   const handleUpdate = useLastCallback(() => {
     if (item?.type !== 'avatar') return;
-    const { avatarOwner, mediaIndex } = item;
-    const avatarPhoto = avatarOwner.profilePhotos?.photos[mediaIndex]!;
+    const { avatarOwner, profilePhotos, mediaIndex } = item;
+    const avatarPhoto = profilePhotos?.photos[mediaIndex]!;
     if (isUserId(avatarOwner.id)) {
       updateProfilePhoto({ photo: avatarPhoto });
     } else {
@@ -170,7 +171,7 @@ const MediaViewerActions: FC<OwnProps & StateProps> = ({
         onClose={closeDeleteModal}
         onConfirm={onBeforeDelete}
         profileId={item.avatarOwner.id}
-        photo={item.avatarOwner.profilePhotos!.photos[item.mediaIndex!]}
+        photo={item.profilePhotos.photos[item.mediaIndex!]}
       />
     ) : undefined;
   }
@@ -180,7 +181,7 @@ const MediaViewerActions: FC<OwnProps & StateProps> = ({
       return undefined;
     }
 
-    return isVideo ? (
+    return item?.type !== 'sponsoredMessage' && (isVideo ? (
       <Button
         round
         size="smaller"
@@ -205,7 +206,7 @@ const MediaViewerActions: FC<OwnProps & StateProps> = ({
       >
         <i className="icon icon-download" />
       </Button>
-    );
+    ));
   }
 
   const openDeleteModalHandler = useLastCallback(() => {
@@ -390,7 +391,7 @@ export default memo(withGlobal<OwnProps>(
 
     const message = item?.type === 'message' ? item.message : undefined;
     const avatarOwner = item?.type === 'avatar' ? item.avatarOwner : undefined;
-    const avatarPhoto = avatarOwner?.profilePhotos?.photos[item!.mediaIndex!];
+    const avatarPhoto = item?.type === 'avatar' && item.profilePhotos.photos[item.mediaIndex];
 
     const currentMessageList = selectCurrentMessageList(global);
     const { threadId } = selectCurrentMessageList(global) || {};

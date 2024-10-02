@@ -1,5 +1,5 @@
 import type { FC, TeactNode } from '../../lib/teact/teact';
-import React, { useEffect } from '../../lib/teact/teact';
+import React, { beginHeavyAnimation, useEffect } from '../../lib/teact/teact';
 
 import type { TextPart } from '../../types';
 
@@ -9,7 +9,6 @@ import { disableDirectTextInput, enableDirectTextInput } from '../../util/direct
 import freezeWhenClosed from '../../util/hoc/freezeWhenClosed';
 import trapFocus from '../../util/trapFocus';
 
-import { dispatchHeavyAnimationEvent } from '../../hooks/useHeavyAnimationCheck';
 import useHistoryBack from '../../hooks/useHistoryBack';
 import useLastCallback from '../../hooks/useLastCallback';
 import useLayoutEffectWithPrevDeps from '../../hooks/useLayoutEffectWithPrevDeps';
@@ -38,6 +37,7 @@ export type OwnProps = {
   noBackdropClose?: boolean;
   children: React.ReactNode;
   style?: string;
+  dialogStyle?: string;
   dialogRef?: React.RefObject<HTMLDivElement>;
   isLowStackPriority?: boolean;
   onClose: () => void;
@@ -60,6 +60,7 @@ const Modal: FC<OwnProps> = ({
   noBackdropClose,
   children,
   style,
+  dialogStyle,
   isLowStackPriority,
   onClose,
   onCloseAnimationEnd,
@@ -110,7 +111,7 @@ const Modal: FC<OwnProps> = ({
     document.body.classList.toggle('has-open-dialog', Boolean(isOpen));
 
     if (isOpen || (!isOpen && prevIsOpen !== undefined)) {
-      dispatchHeavyAnimationEvent(ANIMATION_DURATION);
+      beginHeavyAnimation(ANIMATION_DURATION);
     }
 
     return () => {
@@ -168,7 +169,7 @@ const Modal: FC<OwnProps> = ({
       >
         <div className="modal-container">
           <div className="modal-backdrop" onClick={!noBackdropClose ? onClose : undefined} />
-          <div className="modal-dialog" ref={dialogRef}>
+          <div className="modal-dialog" ref={dialogRef} style={dialogStyle}>
             {renderHeader()}
             <div className={buildClassName('modal-content custom-scroll', contentClassName)} style={style}>
               {children}

@@ -51,7 +51,7 @@ export const MEDIA_PROGRESSIVE_CACHE_DISABLED = false;
 export const MEDIA_PROGRESSIVE_CACHE_NAME = 'tt-media-progressive';
 export const MEDIA_CACHE_MAX_BYTES = 512 * 1024; // 512 KB
 export const CUSTOM_BG_CACHE_NAME = 'tt-custom-bg';
-export const LANG_CACHE_NAME = 'tt-lang-packs-v40';
+export const LANG_CACHE_NAME = 'tt-lang-packs-v42';
 export const ASSET_CACHE_NAME = 'tt-assets';
 export const AUTODOWNLOAD_FILESIZE_MB_LIMITS = [1, 5, 10, 50, 100, 500];
 export const DATA_BROADCAST_CHANNEL_NAME = 'tt-global';
@@ -86,7 +86,6 @@ export const PINNED_MESSAGES_LIMIT = 50;
 export const BLOCKED_LIST_LIMIT = 100;
 export const PROFILE_SENSITIVE_AREA = 500;
 export const TOPIC_LIST_SENSITIVE_AREA = 600;
-export const COMMON_CHATS_LIMIT = 100;
 export const GROUP_CALL_PARTICIPANTS_LIMIT = 100;
 export const STORY_LIST_LIMIT = 100;
 export const API_GENERAL_ID_LIMIT = 100;
@@ -169,16 +168,15 @@ export const TMP_CHAT_ID = '0';
 
 export const ANIMATION_END_DELAY = 100;
 
-export const FAST_SMOOTH_MIN_DURATION = 300;
-export const FAST_SMOOTH_MAX_DURATION = 600;
-export const FAST_SMOOTH_MAX_DISTANCE = 750;
-export const FAST_SMOOTH_SHORT_TRANSITION_MAX_DISTANCE = 300; // px
+export const SCROLL_MIN_DURATION = 300;
+export const SCROLL_MAX_DURATION = 600;
+export const SCROLL_MAX_DISTANCE = 800;
+export const SCROLL_SHORT_TRANSITION_MAX_DISTANCE = 300; // px
 
 // Average duration of message sending animation
-export const API_UPDATE_THROTTLE = Math.round((FAST_SMOOTH_MIN_DURATION + FAST_SMOOTH_MAX_DURATION) / 2);
+export const API_UPDATE_THROTTLE = Math.round((SCROLL_MIN_DURATION + SCROLL_MAX_DURATION) / 2);
 export const API_THROTTLE_RESET_UPDATES = new Set([
   'newMessage', 'newScheduledMessage', 'deleteMessages', 'deleteScheduledMessages', 'deleteHistory',
-  'updateThreadInfos',
 ]);
 
 export const LOCK_SCREEN_ANIMATION_DURATION_MS = 200;
@@ -287,6 +285,7 @@ export const TME_LINK_PREFIX = 'https://t.me/';
 export const BOT_FATHER_USERNAME = 'botfather';
 export const USERNAME_PURCHASE_ERROR = 'USERNAME_PURCHASE_AVAILABLE';
 export const PURCHASE_USERNAME = 'auction';
+export const ACCEPTABLE_USERNAME_ERRORS = new Set([USERNAME_PURCHASE_ERROR, 'USERNAME_INVALID']);
 export const TME_WEB_DOMAINS = new Set(['t.me', 'web.t.me', 'a.t.me', 'k.t.me', 'z.t.me']);
 export const WEB_APP_PLATFORM = 'weba';
 
@@ -342,6 +341,10 @@ export const PEER_COLOR_BG_ACTIVE_OPACITY = '2b';
 export const PEER_COLOR_GRADIENT_STEP = 5; // px
 export const MAX_UPLOAD_FILEPART_SIZE = 524288;
 export const MAX_UNIQUE_REACTIONS = 11;
+
+export const IGNORE_UNHANDLED_ERRORS = new Set([
+  'USER_CANCELED',
+]);
 
 // Group calls
 export const GROUP_CALL_VOLUME_MULTIPLIER = 100;

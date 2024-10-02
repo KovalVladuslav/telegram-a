@@ -4,7 +4,9 @@ import React, {
 } from '../../lib/teact/teact';
 import { getActions, withGlobal } from '../../global';
 
-import type { ApiChat, ApiChatBannedRights, ApiInputMessageReplyInfo } from '../../api/types';
+import type {
+  ApiChat, ApiChatBannedRights, ApiInputMessageReplyInfo, ApiTopic,
+} from '../../api/types';
 import type {
   ActiveEmojiInteraction,
   MessageListType,
@@ -55,6 +57,8 @@ import {
   selectTabState,
   selectTheme,
   selectThreadInfo,
+  selectTopic,
+  selectTopics,
   selectUserFullInfo,
 } from '../../global/selectors';
 import buildClassName from '../../util/buildClassName';
@@ -150,12 +154,12 @@ type StateProps = {
   shouldJoinToSend?: boolean;
   shouldSendJoinRequest?: boolean;
   pinnedIds?: number[];
-  topMessageId?: number;
   canUnpin?: boolean;
   canUnblock?: boolean;
   isSavedDialog?: boolean;
   canShowOpenChatButton?: boolean;
   isContactRequirePremium?: boolean;
+  topics?: Record<number, ApiTopic>;
 };
 
 function isImage(item: DataTransferItem) {
@@ -211,12 +215,12 @@ function MiddleColumn({
   shouldSendJoinRequest,
   shouldLoadFullChat,
   pinnedIds,
-  topMessageId,
   canUnpin,
   canUnblock,
   isSavedDialog,
   canShowOpenChatButton,
   isContactRequirePremium,
+  topics,
 }: OwnProps & StateProps) {
   const {
     openChat,
@@ -246,12 +250,11 @@ function MiddleColumn({
   const [isUnpinModalOpen, setIsUnpinModalOpen] = useState(false);
 
   const {
-    onIntersectionChanged,
-    onFocusPinnedMessage,
-    getCurrentPinnedIndexes,
+    handleIntersectPinnedMessage,
+    handleFocusPinnedMessage,
+    getCurrentPinnedIndex,
     getLoadingPinnedId,
-    getForceNextPinnedInHeader,
-  } = usePinnedMessage(chatId, threadId, pinnedIds, topMessageId);
+  } = usePinnedMessage(chatId, threadId, pinnedIds);
 
   const closeAnimationDuration = isMobile ? LAYER_ANIMATION_DURATION_MS : undefined;
   const hasTools = hasPinned && (
@@ -281,8 +284,8 @@ function MiddleColumn({
   const renderingIsChannel = usePrevDuringAnimation(isChannel, closeAnimationDuration);
   const renderingShouldJoinToSend = usePrevDuringAnimation(shouldJoinToSend, closeAnimationDuration);
   const renderingShouldSendJoinRequest = usePrevDuringAnimation(shouldSendJoinRequest, closeAnimationDuration);
-  const renderingOnPinnedIntersectionChange = usePrevDuringAnimation(
-    chatId ? onIntersectionChanged : undefined,
+  const renderingHandleIntersectPinnedMessage = usePrevDuringAnimation(
+    chatId ? handleIntersectPinnedMessage : undefined,
     closeAnimationDuration,
   );
 
@@ -455,7 +458,7 @@ function MiddleColumn({
   const messageSendingRestrictionReason = getMessageSendingRestrictionReason(
     lang, currentUserBannedRights, defaultBannedRights,
   );
-  const forumComposerPlaceholder = getForumComposerPlaceholder(lang, chat, threadId, Boolean(draftReplyInfo));
+  const forumComposerPlaceholder = getForumComposerPlaceholder(lang, chat, threadId, topics, Boolean(draftReplyInfo));
 
   const composerRestrictionMessage = messageSendingRestrictionReason
     ?? forumComposerPlaceholder
@@ -532,15 +535,16 @@ function MiddleColumn({
               isComments={isComments}
               isReady={isReady}
               isMobile={isMobile}
-              getCurrentPinnedIndexes={getCurrentPinnedIndexes}
+              getCurrentPinnedIndex={getCurrentPinnedIndex}
               getLoadingPinnedId={getLoadingPinnedId}
-              onFocusPinnedMessage={onFocusPinnedMessage}
+              onFocusPinnedMessage={handleFocusPinnedMessage}
             />
             <Transition
               name={shouldSkipHistoryAnimations ? 'none' : withInterfaceAnimations ? 'slide' : 'fade'}
               activeKey={currentTransitionKey}
               shouldCleanup
               cleanupExceptionKey={cleanupExceptionKey}
+              isBlockingAnimation
               onStop={handleSlideTransitionStop}
             >
               <MessageList
@@ -557,8 +561,7 @@ function MiddleColumn({
                 isContactRequirePremium={isContactRequirePremium}
                 withBottomShift={withMessageListBottomShift}
                 withDefaultBg={Boolean(!customBackground && !backgroundColor)}
-                onPinnedIntersectionChange={renderingOnPinnedIntersectionChange!}
-                getForceNextPinnedInHeader={getForceNextPinnedInHeader}
+                onIntersectPinnedMessage={renderingHandleIntersectPinnedMessage!}
               />
               <div className={footerClassName}>
                 {renderingCanPost && (
@@ -775,7 +778,8 @@ export default memo(withGlobal<OwnProps>(
 
     const threadInfo = selectThreadInfo(global, chatId, threadId);
     const isMessageThread = Boolean(!threadInfo?.isCommentsInfo && threadInfo?.fromChannelId);
-    const canPost = chat && getCanPostInChat(chat, threadId, isMessageThread, chatFullInfo);
+    const topic = selectTopic(global, chatId, threadId);
+    const canPost = chat && getCanPostInChat(chat, topic, isMessageThread, chatFullInfo);
     const isBotNotStarted = selectIsChatBotNotStarted(global, chatId);
     const isPinnedMessageList = messageListType === 'pinned';
     const isMainThread = messageListType === 'thread' && threadId === MAIN_THREAD_ID;
@@ -794,17 +798,17 @@ export default memo(withGlobal<OwnProps>(
     );
     const draftReplyInfo = selectDraft(global, chatId, threadId)?.replyInfo;
     const shouldBlockSendInForum = chat?.isForum
-      ? threadId === MAIN_THREAD_ID && !draftReplyInfo && (chat.topics?.[GENERAL_TOPIC_ID]?.isClosed)
+      ? threadId === MAIN_THREAD_ID && !draftReplyInfo && (selectTopic(global, chatId, GENERAL_TOPIC_ID)?.isClosed)
       : false;
     const audioMessage = audioChatId && audioMessageId
       ? selectChatMessage(global, audioChatId, audioMessageId)
       : undefined;
+    const topics = selectTopics(global, chatId);
 
     const isSavedDialog = getIsSavedDialog(chatId, threadId, global.currentUserId);
     const canShowOpenChatButton = isSavedDialog && threadId !== ANONYMOUS_USER_ID;
 
     const isCommentThread = threadId !== MAIN_THREAD_ID && !isSavedDialog && !chat?.isForum;
-    const topMessageId = isCommentThread ? Number(threadId) : undefined;
 
     const canUnpin = chat && (
       isPrivate || (
@@ -848,12 +852,12 @@ export default memo(withGlobal<OwnProps>(
       shouldSendJoinRequest,
       shouldLoadFullChat,
       pinnedIds,
-      topMessageId,
       canUnpin,
       canUnblock,
       isSavedDialog,
       canShowOpenChatButton,
       isContactRequirePremium,
+      topics,
     };
   },
 )(MiddleColumn));

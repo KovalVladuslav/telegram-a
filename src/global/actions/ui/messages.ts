@@ -9,10 +9,11 @@ import { FocusDirection } from '../../../types';
 
 import {
   ANIMATION_END_DELAY,
-  FAST_SMOOTH_MAX_DURATION,
   RELEASE_DATETIME,
+  SCROLL_MAX_DURATION,
   SERVICE_NOTIFICATIONS_USER_ID,
 } from '../../../config';
+import { cancelScrollBlockingAnimation, isAnimatingScroll } from '../../../util/animateScroll';
 import { copyHtmlToClipboard } from '../../../util/clipboard';
 import { getCurrentTabId } from '../../../util/establishMultitabRole';
 import { compact, findLast } from '../../../util/iteratees';
@@ -73,7 +74,7 @@ import {
 import { getIsMobile } from '../../../hooks/useAppLayout';
 
 const FOCUS_DURATION = 1500;
-const FOCUS_NO_HIGHLIGHT_DURATION = FAST_SMOOTH_MAX_DURATION + ANIMATION_END_DELAY;
+const FOCUS_NO_HIGHLIGHT_DURATION = SCROLL_MAX_DURATION + ANIMATION_END_DELAY;
 const POLL_RESULT_OPEN_DELAY_MS = 450;
 const VERSION_NOTIFICATION_DURATION = 1000 * 60 * 60 * 24 * 3; // 3 days
 const SERVICE_NOTIFICATIONS_MAX_AMOUNT = 1e3;
@@ -489,6 +490,10 @@ addActionHandler('focusMessage', (global, actions, payload): ActionReturnType =>
     global = updateFocusDirection(global, direction, tabId);
   }
 
+  if (isAnimatingScroll()) {
+    cancelScrollBlockingAnimation();
+  }
+
   setGlobal(global, { forceOnHeavyAnimation: true });
 
   actions.openThread({
@@ -627,7 +632,7 @@ addActionHandler('cancelMediaHashDownloads', (global, actions, payload): ActionR
 });
 
 addActionHandler('downloadMedia', (global, actions, payload): ActionReturnType => {
-  const { media, tabId = getCurrentTabId() } = payload;
+  const { media, originMessage, tabId = getCurrentTabId() } = payload;
 
   const hash = getMediaHash(media, 'download');
   if (!hash) return undefined;
@@ -637,6 +642,8 @@ addActionHandler('downloadMedia', (global, actions, payload): ActionReturnType =
     size,
     format: getMediaFormat(media, 'download'),
     filename: getMediaFilename(media),
+    originChatId: originMessage?.chatId,
+    originMessageId: originMessage?.id,
   } satisfies ActiveDownloads[string];
 
   return addActiveMediaDownload(global, hash, metadata, tabId);
@@ -659,7 +666,7 @@ addActionHandler('downloadSelectedMessages', (global, actions, payload): ActionR
   messages.forEach((message) => {
     const media = getMessageDownloadableMedia(message);
     if (!media) return;
-    actions.downloadMedia({ media, tabId });
+    actions.downloadMedia({ media, originMessage: message, tabId });
   });
 });
 

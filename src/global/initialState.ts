@@ -98,6 +98,7 @@ export const INITIAL_GLOBAL_STATE: GlobalState = {
     statusesById: {},
     fullInfoById: {},
     previewMediaByBotId: {},
+    commonChatsById: {},
   },
 
   chats: {
@@ -109,6 +110,7 @@ export const INITIAL_GLOBAL_STATE: GlobalState = {
     byId: {},
     fullInfoById: {},
     similarChannelsById: {},
+    topicsInfoById: {},
     loadingParameters: {
       active: {},
       archived: {},
@@ -297,6 +299,9 @@ export const INITIAL_GLOBAL_STATE: GlobalState = {
     isMinimized: false,
     isHidden: false,
   },
+
+  profilePhotosById: {},
+  monetizationInfo: {},
 };
 
 export const INITIAL_TAB_STATE: TabState = {
@@ -318,6 +323,14 @@ export const INITIAL_TAB_STATE: TabState = {
   inlineBots: {
     isLoading: false,
     byUsername: {},
+  },
+
+  webApps: {
+    openedWebApps: {},
+    openedOrderedKeys: [],
+    sessionKeys: [],
+    modalState: 'maximized',
+    isModalOpen: false,
   },
 
   globalSearch: {},

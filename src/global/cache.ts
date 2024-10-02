@@ -1,4 +1,5 @@
 /* eslint-disable eslint-multitab-tt/no-immediate-global */
+import { getIsHeavyAnimating, onFullyIdle } from '../lib/teact/teact';
 import { addCallback, removeCallback } from '../lib/teact/teactn';
 
 import type { ApiAvailableReaction, ApiMessage } from '../api/types';
@@ -35,16 +36,15 @@ import { addActionHandler, getGlobal } from './index';
 import { INITIAL_GLOBAL_STATE, INITIAL_PERFORMANCE_STATE_MID, INITIAL_PERFORMANCE_STATE_MIN } from './initialState';
 import { clearGlobalForLockScreen } from './reducers';
 import {
-  selectChat,
   selectChatLastMessageId,
   selectChatMessages,
   selectCurrentMessageList,
+  selectTopics,
   selectViewportIds,
   selectVisibleUsers,
 } from './selectors';
 
 import { getIsMobile } from '../hooks/useAppLayout';
-import { isHeavyAnimating, onFullyIdle } from '../hooks/useHeavyAnimationCheck';
 
 const UPDATE_THROTTLE = 5000;
 
@@ -245,11 +245,17 @@ function unsafeMigrateCache(cached: GlobalState, initialState: GlobalState) {
   if (!cached.topBotApps) {
     cached.topBotApps = initialState.topBotApps;
   }
+  if (!cached.users.commonChatsById) {
+    cached.users.commonChatsById = initialState.users.commonChatsById;
+  }
+  if (!cached.chats.topicsInfoById) {
+    cached.chats.topicsInfoById = initialState.chats.topicsInfoById;
+  }
 }
 
 function updateCache(force?: boolean) {
   const global = getGlobal();
-  if (isRemovingCache || !isCaching || global.isLoggingOut || (!force && isHeavyAnimating())) {
+  if (isRemovingCache || !isCaching || global.isLoggingOut || (!force && getIsHeavyAnimating())) {
     return;
   }
 
@@ -390,10 +396,10 @@ function reduceUsers<T extends GlobalState>(global: T): GlobalState['users'] {
   ]).slice(0, GLOBAL_STATE_CACHE_USER_LIST_LIMIT);
 
   return {
+    ...INITIAL_GLOBAL_STATE.users,
     byId: pickTruthy(byId, idsToSave),
     statusesById: pickTruthy(statusesById, idsToSave),
     fullInfoById: pickTruthy(fullInfoById, idsToSave),
-    previewMediaByBotId: {},
   };
 }
 
@@ -436,12 +442,14 @@ function reduceChats<T extends GlobalState>(global: T): GlobalState['chats'] {
     ...global.chats,
     similarChannelsById: {},
     isFullyLoaded: {},
+    loadingParameters: INITIAL_GLOBAL_STATE.chats.loadingParameters,
     byId: pickTruthy(global.chats.byId, idsToSave),
     fullInfoById: pickTruthy(global.chats.fullInfoById, idsToSave),
     lastMessageIds: {
       all: pickTruthy(global.chats.lastMessageIds.all || {}, idsToSave),
       saved: global.chats.lastMessageIds.saved,
     },
+    topicsInfoById: pickTruthy(global.chats.topicsInfoById, currentChatIds),
   };
 }
 
@@ -482,7 +490,6 @@ function reduceMessages<T extends GlobalState>(global: T): GlobalState['messages
       return;
     }
 
-    const chat = selectChat(global, chatId);
     const chatLastMessageId = selectChatLastMessageId(global, chatId);
 
     const openedThreadIds = Array.from(openedChatThreadIds[chatId] || []);
@@ -494,8 +501,9 @@ function reduceMessages<T extends GlobalState>(global: T): GlobalState['messages
     const threadsToSave = pickTruthy(current.threadsById, [MAIN_THREAD_ID, ...threadIds]);
 
     const viewportIdsToSave = unique(Object.values(threadsToSave).flatMap((thread) => thread.lastViewportIds || []));
-    const topicLastMessageIds = chat?.topics ? Object.values(chat.topics).map(({ lastMessageId }) => lastMessageId)
-      : [];
+    const topics = selectTopics(global, chatId);
+    const topicLastMessageIds = topics && forumPanelChatIds.includes(chatId)
+      ? Object.values(topics).map(({ lastMessageId }) => lastMessageId) : [];
     const savedLastMessageIds = chatId === currentUserId && global.chats.lastMessageIds.saved
       ? Object.values(global.chats.lastMessageIds.saved) : [];
     const lastMessageIdsToSave = [chatLastMessageId].concat(topicLastMessageIds).concat(savedLastMessageIds)

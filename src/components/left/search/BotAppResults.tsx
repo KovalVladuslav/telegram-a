@@ -27,7 +27,6 @@ export type OwnProps = {
 };
 
 type StateProps = {
-  isSynced?: boolean;
   isLoading?: boolean;
   foundIds?: string[];
   recentBotIds?: string[];
@@ -38,7 +37,6 @@ const runThrottled = throttle((cb) => cb(), 500, true);
 
 const BotAppResults: FC<OwnProps & StateProps> = ({
   searchQuery,
-  isSynced,
   isLoading,
   foundIds,
   recentBotIds,
@@ -69,13 +67,12 @@ const BotAppResults: FC<OwnProps & StateProps> = ({
   });
 
   const handleLoadMore = useCallback(({ direction }: { direction: LoadMoreDirection }) => {
-    if (!isSynced) return;
     if (direction === LoadMoreDirection.Backwards) {
       runThrottled(() => {
         searchPopularBotApps();
       });
     }
-  }, [isSynced]);
+  }, []);
 
   const handleToggleShowMoreMine = useLastCallback(() => {
     setShouldShowMoreMine((prev) => !prev);
@@ -87,7 +84,7 @@ const BotAppResults: FC<OwnProps & StateProps> = ({
     <div ref={containerRef} className="LeftSearch--content">
       <InfiniteScroll
         className="search-content custom-scroll"
-        items={filteredFoundIds}
+        items={canRenderContents ? filteredFoundIds : undefined}
         onLoadMore={handleLoadMore}
         noFastList
       >
@@ -145,7 +142,6 @@ export default memo(withGlobal<OwnProps>((global) => {
   const foundIds = globalSearch.popularBotApps?.peerIds;
 
   return {
-    isSynced: global.isSynced,
     isLoading: !foundIds && globalSearch.fetchingStatus?.botApps,
     foundIds,
     recentBotIds: global.topBotApps.userIds,

@@ -1,13 +1,13 @@
 import type { RefObject } from 'react';
 import type { FC } from '../../lib/teact/teact';
-import React, { memo } from '../../lib/teact/teact';
+import React, { getIsHeavyAnimating, memo } from '../../lib/teact/teact';
 import { getActions } from '../../global';
 
 import type { MessageListType } from '../../global/types';
 import type { ThreadId } from '../../types';
 import type { Signal } from '../../util/signals';
 import type { MessageDateGroup } from './helpers/groupMessages';
-import type { PinnedIntersectionChangedCallback } from './hooks/usePinnedMessage';
+import type { OnIntersectPinnedMessage } from './hooks/usePinnedMessage';
 import { MAIN_THREAD_ID } from '../../api/types';
 
 import { SCHEDULED_WHEN_ONLINE } from '../../config';
@@ -25,7 +25,6 @@ import { isAlbum } from './helpers/groupMessages';
 import { preventMessageInputBlur } from './helpers/preventMessageInputBlur';
 
 import useDerivedSignal from '../../hooks/useDerivedSignal';
-import { getIsHeavyAnimating } from '../../hooks/useHeavyAnimationCheck';
 import useOldLang from '../../hooks/useOldLang';
 import usePreviousDeprecated from '../../hooks/usePreviousDeprecated';
 import useMessageObservers from './hooks/useMessageObservers';
@@ -63,7 +62,7 @@ interface OwnProps {
   isSavedDialog?: boolean;
   onScrollDownToggle: BooleanToVoidFunction;
   onNotchToggle: AnyToVoidFunction;
-  onPinnedIntersectionChange: PinnedIntersectionChangedCallback;
+  onIntersectPinnedMessage: OnIntersectPinnedMessage;
 }
 
 const UNREAD_DIVIDER_CLASS = 'unread-divider';
@@ -95,7 +94,7 @@ const MessageListContent: FC<OwnProps> = ({
   isSavedDialog,
   onScrollDownToggle,
   onNotchToggle,
-  onPinnedIntersectionChange,
+  onIntersectPinnedMessage,
 }) => {
   const { openHistoryCalendar } = getActions();
 
@@ -108,7 +107,7 @@ const MessageListContent: FC<OwnProps> = ({
     observeIntersectionForReading,
     observeIntersectionForLoading,
     observeIntersectionForPlaying,
-  } = useMessageObservers(type, containerRef, memoFirstUnreadIdRef, onPinnedIntersectionChange, chatId);
+  } = useMessageObservers(type, containerRef, memoFirstUnreadIdRef, onIntersectPinnedMessage, chatId);
 
   const {
     withHistoryTriggers,
@@ -181,7 +180,7 @@ const MessageListContent: FC<OwnProps> = ({
             appearanceOrder={messageCountToAnimate - ++appearanceIndex}
             isJustAdded={isLastInList && isNewMessage}
             isLastInList={isLastInList}
-            onPinnedIntersectionChange={onPinnedIntersectionChange}
+            onIntersectPinnedMessage={onIntersectPinnedMessage}
           />,
         ]);
       }
@@ -250,7 +249,7 @@ const MessageListContent: FC<OwnProps> = ({
             isLastInDocumentGroup={position.isLastInDocumentGroup}
             isLastInList={position.isLastInList}
             memoFirstUnreadIdRef={memoFirstUnreadIdRef}
-            onPinnedIntersectionChange={onPinnedIntersectionChange}
+            onIntersectPinnedMessage={onIntersectPinnedMessage}
             getIsMessageListReady={getIsReady}
           />,
           message.id === threadId && (
@@ -298,7 +297,13 @@ const MessageListContent: FC<OwnProps> = ({
       {shouldRenderBotInfo && <MessageListBotInfo isInMessageList key={`bot_info_${chatId}`} chatId={chatId} />}
       {dateGroups.flat()}
       {areAdsEnabled && isViewportNewest && (
-        <SponsoredMessage key={chatId} chatId={chatId} containerRef={containerRef} />
+        <SponsoredMessage
+          key={chatId}
+          chatId={chatId}
+          containerRef={containerRef}
+          observeIntersectionForLoading={observeIntersectionForLoading}
+          observeIntersectionForPlaying={observeIntersectionForPlaying}
+        />
       )}
       {withHistoryTriggers && (
         <div

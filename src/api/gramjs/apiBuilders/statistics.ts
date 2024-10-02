@@ -8,7 +8,7 @@ import type {
   ApiPostStatistics,
   ApiStoryPublicForward,
   ChannelMonetizationBalances,
-  PrepaidGiveaway, StatisticsGraph,
+  StatisticsGraph,
   StatisticsMessageInteractionCounter,
   StatisticsOverviewItem,
   StatisticsOverviewPercentage,
@@ -233,15 +233,6 @@ export function buildStatisticsPercentage(data: GramJs.StatsPercentValue): Stati
   };
 }
 
-export function buildPrepaidGiveaway(prepaidGiveaway: GramJs.PrepaidGiveaway): PrepaidGiveaway {
-  return {
-    id: prepaidGiveaway.id.toString(),
-    date: prepaidGiveaway.date,
-    months: prepaidGiveaway.months,
-    quantity: prepaidGiveaway.quantity,
-  };
-}
-
 function getOverviewPeriod(data: GramJs.StatsDateRangeDays): StatisticsOverviewPeriod {
   return {
     maxDate: data.maxDate,
@@ -274,10 +265,12 @@ function buildChannelMonetizationBalances({
   currentBalance,
   availableBalance,
   overallRevenue,
+  withdrawalEnabled,
 }: GramJs.BroadcastRevenueBalances): ChannelMonetizationBalances {
   return {
     currentBalance: Number(currentBalance) / DECIMALS,
     availableBalance: Number(availableBalance) / DECIMALS,
     overallRevenue: Number(overallRevenue) / DECIMALS,
+    isWithdrawalEnabled: withdrawalEnabled,
   };
 }

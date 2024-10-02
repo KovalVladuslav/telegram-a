@@ -12,6 +12,7 @@ export { default as UrlAuthModal } from '../components/modals/urlAuth/UrlAuthMod
 export { default as HistoryCalendar } from '../components/main/HistoryCalendar';
 export { default as NewContactModal } from '../components/main/NewContactModal';
 export { default as WebAppModal } from '../components/modals/webApp/WebAppModal';
+export { default as MinimizedWebAppModal } from '../components/modals/webApp/MinimizedWebAppModal';
 export { default as BotTrustModal } from '../components/main/BotTrustModal';
 export { default as AttachBotInstallModal } from '../components/modals/attachBotInstall/AttachBotInstallModal';
 export { default as DeleteFolderDialog } from '../components/main/DeleteFolderDialog';
@@ -32,6 +33,7 @@ export { default as StarsTransactionInfoModal } from '../components/modals/stars
 
 export { default as AboutAdsModal } from '../components/common/AboutAdsModal';
 export { default as AboutMonetizationModal } from '../components/common/AboutMonetizationModal';
+export { default as VerificationMonetizationModal } from '../components/common/VerificationMonetizationModal';
 export { default as ReportAdModal } from '../components/modals/reportAd/ReportAdModal';
 export { default as CalendarModal } from '../components/common/CalendarModal';
 export { default as DeleteMessageModal } from '../components/common/DeleteMessageModal';

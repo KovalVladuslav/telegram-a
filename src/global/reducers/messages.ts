@@ -17,11 +17,9 @@ import {
 } from '../../util/iteratees';
 import { isLocalMessageId, type MessageKey } from '../../util/keys/messageKey';
 import {
-  hasMessageTtl, isMediaLoadableInViewer,
-  mergeIdRanges, orderHistoryIds, orderPinnedIds,
+  hasMessageTtl, isMediaLoadableInViewer, mergeIdRanges, orderHistoryIds, orderPinnedIds,
 } from '../helpers';
 import {
-  selectChat,
   selectChatMessage,
   selectChatMessages,
   selectChatScheduledMessages,
@@ -43,10 +41,7 @@ import { removeIdFromSearchResults } from './middleSearch';
 import { updateTabState } from './tabs';
 import { clearMessageTranslation } from './translations';
 
-type MessageStoreSections = {
-  byId: Record<number, ApiMessage>;
-  threadsById: Record<number, Thread>;
-};
+type MessageStoreSections = GlobalState['messages']['byChatId'][string];
 
 export function updateCurrentMessageList<T extends GlobalState>(
   global: T,
@@ -62,10 +57,18 @@ export function updateCurrentMessageList<T extends GlobalState>(
   if (shouldReplaceHistory || (IS_TEST && !IS_MOCKED_CLIENT)) {
     newMessageLists = chatId ? [{ chatId, threadId, type }] : [];
   } else if (chatId) {
-    const last = messageLists[messageLists.length - 1];
-    if (!last || last.chatId !== chatId || last.threadId !== threadId || last.type !== type) {
-      if (last && (last.chatId === TMP_CHAT_ID || shouldReplaceLast)) {
-        newMessageLists = [...messageLists.slice(0, -1), { chatId, threadId, type }];
+    const current = messageLists[messageLists.length - 1];
+    if (current?.chatId === chatId && current.threadId === threadId && current.type === type) {
+      return global;
+    }
+
+    if (current && (current.chatId === TMP_CHAT_ID || shouldReplaceLast)) {
+      newMessageLists = [...messageLists.slice(0, -1), { chatId, threadId, type }];
+    } else {
+      const previous = messageLists[messageLists.length - 2];
+
+      if (previous?.chatId === chatId && previous.threadId === threadId && previous.type === type) {
+        newMessageLists = messageLists.slice(0, -1);
       } else {
         newMessageLists = [...messageLists, { chatId, threadId, type }];
       }
@@ -128,7 +131,7 @@ export function updateThread<T extends GlobalState>(
   });
 }
 
-function updateMessageStore<T extends GlobalState>(
+export function updateMessageStore<T extends GlobalState>(
   global: T, chatId: string, update: Partial<MessageStoreSections>,
 ): T {
   const current = global.messages.byChatId[chatId] || { byId: {}, threadsById: {} };
@@ -354,6 +357,17 @@ export function deleteChatMessages<T extends GlobalState>(
     }
 
     Object.values(global.byTabId).forEach(({ id: tabId }) => {
+      const tabState = selectTabState(global, tabId);
+      const activeDownloadsInChat = Object.entries(tabState.activeDownloads).filter(
+        ([, { originChatId, originMessageId }]) => originChatId === chatId && originMessageId,
+      );
+
+      activeDownloadsInChat.forEach(([mediaHash, context]) => {
+        if (messageIds.includes(context.originMessageId!)) {
+          global = cancelMessageMediaDownload(global, [mediaHash], tabId);
+        }
+      });
+
       mediaIdsToRemove.forEach((mediaId) => {
         global = removeIdFromSearchResults(global, chatId, threadId, mediaId, tabId);
       });
@@ -576,15 +590,9 @@ export function updateThreadInfo<T extends GlobalState>(
     ...update,
   } as ApiThreadInfo;
 
-  if (!doNotUpdateLinked) {
+  if (!doNotUpdateLinked && !newThreadInfo.isCommentsInfo) {
     const linkedUpdate = pick(newThreadInfo, ['messagesCount', 'lastMessageId', 'lastReadInboxMessageId']);
-    if (newThreadInfo.isCommentsInfo) {
-      if (newThreadInfo.threadId) {
-        global = updateThreadInfo(
-          global, newThreadInfo.chatId, newThreadInfo.threadId, linkedUpdate, true,
-        );
-      }
-    } else if (newThreadInfo.fromChannelId && newThreadInfo.fromMessageId) {
+    if (newThreadInfo.fromChannelId && newThreadInfo.fromMessageId) {
       global = updateThreadInfo(
         global, newThreadInfo.fromChannelId, newThreadInfo.fromMessageId, linkedUpdate, true,
       );
@@ -598,10 +606,12 @@ export function updateThreadInfos<T extends GlobalState>(
   global: T, updates: Partial<ApiThreadInfo>[],
 ): T {
   updates.forEach((update) => {
-    global = updateThreadInfo(global,
+    global = updateThreadInfo(
+      global,
       update.isCommentsInfo ? update.originChannelId! : update.chatId!,
       update.isCommentsInfo ? update.originMessageId! : update.threadId!,
-      update);
+      update,
+    );
   });
 
   return global;
@@ -644,26 +654,28 @@ export function updateQuickReplyMessages<T extends GlobalState>(
   };
 }
 
-export function updateFocusedMessage<T extends GlobalState>({
-  global,
-  chatId,
-  messageId,
-  threadId = MAIN_THREAD_ID,
-  noHighlight = false,
-  isResizingContainer = false,
-  quote,
-  scrollTargetPosition,
-}: {
-  global: T;
-  chatId?: string;
-  messageId?: number;
-  threadId?: ThreadId;
-  noHighlight?: boolean;
-  isResizingContainer?: boolean;
-  quote?: string;
-  scrollTargetPosition?: ScrollTargetPosition;
-},
-...[tabId = getCurrentTabId()]: TabArgs<T>): T {
+export function updateFocusedMessage<T extends GlobalState>(
+  {
+    global,
+    chatId,
+    messageId,
+    threadId = MAIN_THREAD_ID,
+    noHighlight = false,
+    isResizingContainer = false,
+    quote,
+    scrollTargetPosition,
+  }: {
+    global: T;
+    chatId?: string;
+    messageId?: number;
+    threadId?: ThreadId;
+    noHighlight?: boolean;
+    isResizingContainer?: boolean;
+    quote?: string;
+    scrollTargetPosition?: ScrollTargetPosition;
+  },
+  ...[tabId = getCurrentTabId()]: TabArgs<T>
+): T {
   return updateTabState(global, {
     focusedMessage: {
       ...selectTabState(global, tabId).focusedMessage,
@@ -816,32 +828,6 @@ export function updateThreadUnreadFromForwardedMessage<T extends GlobalState>(
     }
   }
   return global;
-}
-
-export function updateTopicLastMessageId<T extends GlobalState>(
-  global: T, chatId: string, threadId: ThreadId, lastMessageId: number,
-) {
-  const chat = selectChat(global, chatId);
-  if (!chat?.topics?.[threadId]) return global;
-  return {
-    ...global,
-    chats: {
-      ...global.chats,
-      byId: {
-        ...global.chats.byId,
-        [chatId]: {
-          ...chat,
-          topics: {
-            ...chat.topics,
-            [threadId]: {
-              ...chat.topics[threadId],
-              lastMessageId,
-            },
-          },
-        },
-      },
-    },
-  };
 }
 
 export function addActiveMediaDownload<T extends GlobalState>(

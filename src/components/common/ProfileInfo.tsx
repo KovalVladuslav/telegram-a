@@ -3,7 +3,7 @@ import React, { memo, useEffect, useState } from '../../lib/teact/teact';
 import { getActions, withGlobal } from '../../global';
 
 import type {
-  ApiChat, ApiSticker, ApiTopic, ApiUser, ApiUserStatus,
+  ApiChat, ApiPeerPhotos, ApiSticker, ApiTopic, ApiUser, ApiUserStatus,
 } from '../../api/types';
 import { MediaViewerOrigin } from '../../types';
 
@@ -13,8 +13,10 @@ import {
 import {
   selectChat,
   selectCurrentMessageList,
+  selectPeerPhotos,
   selectTabState,
   selectThreadMessagesCount,
+  selectTopic,
   selectUser,
   selectUserStatus,
 } from '../../global/selectors';
@@ -54,6 +56,7 @@ type StateProps =
     topic?: ApiTopic;
     messagesCount?: number;
     emojiStatusSticker?: ApiSticker;
+    profilePhotos?: ApiPeerPhotos;
   };
 
 const EMOJI_STATUS_SIZE = 24;
@@ -72,6 +75,7 @@ const ProfileInfo: FC<OwnProps & StateProps> = ({
   topic,
   messagesCount,
   emojiStatusSticker,
+  profilePhotos,
   peerId,
 }) => {
   const {
@@ -84,9 +88,7 @@ const ProfileInfo: FC<OwnProps & StateProps> = ({
 
   const lang = useOldLang();
 
-  const userProfilePhotos = user?.profilePhotos;
-  const chatProfilePhotos = chat?.profilePhotos;
-  const photos = userProfilePhotos?.photos || chatProfilePhotos?.photos || MEMO_EMPTY_ARRAY;
+  const photos = profilePhotos?.photos || MEMO_EMPTY_ARRAY;
   const prevMediaIndex = usePreviousDeprecated(mediaIndex);
   const prevAvatarOwnerId = usePreviousDeprecated(avatarOwnerId);
   const [hasSlideAnimation, setHasSlideAnimation] = useState(true);
@@ -213,7 +215,7 @@ const ProfileInfo: FC<OwnProps & StateProps> = ({
   }
 
   function renderPhotoTabs() {
-    const totalPhotosLength = Math.max(photos.length, userProfilePhotos?.count || 0, chatProfilePhotos?.count || 0);
+    const totalPhotosLength = Math.max(photos.length, profilePhotos?.count || 0);
     if (!photos || totalPhotosLength <= 1) {
       return undefined;
     }
@@ -293,18 +295,18 @@ const ProfileInfo: FC<OwnProps & StateProps> = ({
     >
       <div className={styles.photoWrapper}>
         {renderPhotoTabs()}
-        {!forceShowSelf && userProfilePhotos?.personalPhoto && (
+        {!forceShowSelf && profilePhotos?.personalPhoto && (
           <div className={buildClassName(
             styles.fallbackPhoto,
             isFirst && styles.fallbackPhotoVisible,
           )}
           >
             <div className={styles.fallbackPhotoContents}>
-              {lang(userProfilePhotos.personalPhoto.isVideo ? 'UserInfo.CustomVideo' : 'UserInfo.CustomPhoto')}
+              {lang(profilePhotos.personalPhoto.isVideo ? 'UserInfo.CustomVideo' : 'UserInfo.CustomPhoto')}
             </div>
           </div>
         )}
-        {forceShowSelf && userProfilePhotos?.fallbackPhoto && (
+        {forceShowSelf && profilePhotos?.fallbackPhoto && (
           <div className={buildClassName(
             styles.fallbackPhoto,
             (isFirst || isLast) && styles.fallbackPhotoVisible,
@@ -313,12 +315,12 @@ const ProfileInfo: FC<OwnProps & StateProps> = ({
             <div className={styles.fallbackPhotoContents} onClick={handleSelectFallbackPhoto}>
               {!isLast && (
                 <Avatar
-                  photo={userProfilePhotos.fallbackPhoto}
+                  photo={profilePhotos.fallbackPhoto}
                   className={styles.fallbackPhotoAvatar}
                   size="mini"
                 />
               )}
-              {lang(userProfilePhotos.fallbackPhoto.isVideo ? 'UserInfo.PublicVideo' : 'UserInfo.PublicPhoto')}
+              {lang(profilePhotos.fallbackPhoto.isVideo ? 'UserInfo.PublicVideo' : 'UserInfo.PublicPhoto')}
             </div>
           </div>
         )}
@@ -368,10 +370,11 @@ export default memo(withGlobal<OwnProps>(
     const user = selectUser(global, peerId);
     const userStatus = selectUserStatus(global, peerId);
     const chat = selectChat(global, peerId);
+    const profilePhotos = selectPeerPhotos(global, peerId);
     const { mediaIndex, chatId: avatarOwnerId } = selectTabState(global).mediaViewer;
     const isForum = chat?.isForum;
     const { threadId: currentTopicId } = selectCurrentMessageList(global) || {};
-    const topic = isForum && currentTopicId ? chat?.topics?.[currentTopicId] : undefined;
+    const topic = isForum && currentTopicId ? selectTopic(global, peerId, currentTopicId) : undefined;
 
     const emojiStatus = (user || chat)?.emojiStatus;
     const emojiStatusSticker = emojiStatus ? global.customEmojis.byId[emojiStatus.documentId] : undefined;
@@ -383,6 +386,7 @@ export default memo(withGlobal<OwnProps>(
       mediaIndex,
       avatarOwnerId,
       emojiStatusSticker,
+      profilePhotos,
       ...(topic && {
         topic,
         messagesCount: selectThreadMessagesCount(global, peerId, currentTopicId!),

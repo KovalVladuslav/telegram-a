@@ -8,6 +8,9 @@ import safeExec from '../../util/safeExec';
 import { throttleWith } from '../../util/schedulers';
 import { createSignal, isSignal, type Signal } from '../../util/signals';
 import { requestMeasure, requestMutation } from '../fasterdom/fasterdom';
+import { getIsBlockingAnimating } from './heavyAnimation';
+
+export { getIsHeavyAnimating, beginHeavyAnimation, onFullyIdle } from './heavyAnimation';
 
 export type Props = AnyLiteral;
 export type FC<P extends Props = any> = (props: P) => any;
@@ -90,7 +93,7 @@ interface ComponentInstance {
       cursor: number;
       byCursor: {
         dependencies?: readonly any[];
-        schedule: NoneToVoidFunction;
+        schedule?: NoneToVoidFunction;
         cleanup?: NoneToVoidFunction;
         releaseSignals?: NoneToVoidFunction;
       }[];
@@ -327,6 +330,11 @@ let areImmediateEffectsCaptured = false;
  */
 
 const runUpdatePassOnRaf = throttleWith(requestMeasure, () => {
+  if (getIsBlockingAnimating()) {
+    getIsBlockingAnimating.once(runUpdatePassOnRaf);
+    return;
+  }
+
   const runImmediateEffects = captureImmediateEffects();
 
   idsToExcludeFromUpdate = new Set();
@@ -653,43 +661,123 @@ function useEffectBase(
   if (!renderingInstance.hooks) {
     renderingInstance.hooks = {};
   }
+
   if (!renderingInstance.hooks.effects) {
     renderingInstance.hooks.effects = { cursor: 0, byCursor: [] };
   }
 
   const { cursor, byCursor } = renderingInstance.hooks.effects;
+  const effectConfig = byCursor[cursor];
   const componentInstance = renderingInstance;
 
-  const runEffectCleanup = () => safeExec(() => {
-    const { cleanup } = byCursor[cursor];
-    if (!cleanup) {
-      return;
-    }
+  function schedule() {
+    scheduleEffect(componentInstance, cursor, effect, isLayout);
+  }
 
-    // eslint-disable-next-line @typescript-eslint/naming-convention
-    let DEBUG_startAt: number | undefined;
-    if (DEBUG) {
-      DEBUG_startAt = performance.now();
-    }
+  if (dependencies && effectConfig?.dependencies) {
+    if (dependencies.some((dependency, i) => dependency !== effectConfig.dependencies![i])) {
+      if (DEBUG && debugKey) {
+        const causedBy = dependencies.reduce((res, newValue, i) => {
+          const prevValue = effectConfig.dependencies![i];
+          if (newValue !== prevValue) {
+            res.push(`${i}: ${prevValue} => ${newValue}`);
+          }
 
-    cleanup();
+          return res;
+        }, []);
 
-    if (DEBUG) {
-      const duration = performance.now() - DEBUG_startAt!;
-      const componentName = DEBUG_resolveComponentName(componentInstance.Component);
-      if (duration > DEBUG_EFFECT_THRESHOLD) {
         // eslint-disable-next-line no-console
-        console.warn(
-          `[Teact] Slow cleanup at effect cursor #${cursor}: ${componentName}, ${Math.round(duration)} ms`,
-        );
+        console.log(`[Teact] Effect "${debugKey}" caused by dependencies.`, causedBy.join(', '));
       }
+
+      schedule();
     }
-  }, () => {
-    // eslint-disable-next-line no-console, max-len
-    console.error(`[Teact] Error in effect cleanup at cursor #${cursor} in ${componentInstance.name}`, componentInstance);
-  }, () => {
-    byCursor[cursor].cleanup = undefined;
-  });
+  } else {
+    if (debugKey) {
+      // eslint-disable-next-line no-console
+      console.log(`[Teact] Effect "${debugKey}" caused by missing dependencies.`);
+    }
+
+    schedule();
+  }
+
+  function setupSignals() {
+    const cleanups = dependencies?.filter(isSignal).map((signal, i) => signal.subscribe(() => {
+      if (debugKey) {
+        // eslint-disable-next-line no-console
+        console.log(`[Teact] Effect "${debugKey}" caused by signal #${i} new value:`, signal());
+      }
+
+      byCursor[cursor].schedule!();
+    }));
+
+    if (!cleanups?.length) {
+      return undefined;
+    }
+
+    return () => {
+      for (const cleanup of cleanups) {
+        cleanup();
+      }
+    };
+  }
+
+  byCursor[cursor] = {
+    ...effectConfig,
+    dependencies,
+    schedule,
+  };
+
+  if (!effectConfig) {
+    byCursor[cursor].releaseSignals = setupSignals();
+  }
+
+  renderingInstance.hooks.effects.cursor++;
+}
+
+function scheduleEffect(
+  componentInstance: ComponentInstance,
+  cursor: number,
+  effect: Effect,
+  isLayout: boolean,
+) {
+  const { byCursor } = componentInstance.hooks!.effects!;
+  const cleanup = byCursor[cursor]?.cleanup;
+  const cleanupsContainer = isLayout ? pendingLayoutCleanups : pendingCleanups;
+  const effectsContainer = isLayout ? pendingLayoutEffects : pendingEffects;
+  const effectId = `${componentInstance.id}_${cursor}`;
+
+  if (cleanup) {
+    const runEffectCleanup = () => safeExec(() => {
+      // eslint-disable-next-line @typescript-eslint/naming-convention
+      let DEBUG_startAt: number | undefined;
+      if (DEBUG) {
+        DEBUG_startAt = performance.now();
+      }
+
+      cleanup();
+
+      if (DEBUG) {
+        const duration = performance.now() - DEBUG_startAt!;
+        const componentName = DEBUG_resolveComponentName(componentInstance.Component);
+        if (duration > DEBUG_EFFECT_THRESHOLD) {
+          // eslint-disable-next-line no-console
+          console.warn(
+            `[Teact] Slow cleanup at effect cursor #${cursor}: ${componentName}, ${Math.round(duration)} ms`,
+          );
+        }
+      }
+
+      return undefined;
+    }, () => {
+      // eslint-disable-next-line no-console, max-len
+      console.error(`[Teact] Error in effect cleanup at cursor #${cursor} in ${componentInstance.name}`, componentInstance);
+    }, () => {
+      byCursor[cursor].cleanup = undefined;
+    });
+
+    cleanupsContainer.set(effectId, runEffectCleanup);
+  }
 
   const runEffect = () => safeExec(() => {
     if (componentInstance.mountState === MountState.Unmounted) {
@@ -720,81 +808,9 @@ function useEffectBase(
     console.error(`[Teact] Error in effect at cursor #${cursor} in ${componentInstance.name}`, componentInstance);
   });
 
-  function schedule() {
-    const effectId = `${componentInstance.id}_${cursor}`;
+  effectsContainer.set(effectId, runEffect);
 
-    if (isLayout) {
-      pendingLayoutCleanups.set(effectId, runEffectCleanup);
-      pendingLayoutEffects.set(effectId, runEffect);
-    } else {
-      pendingCleanups.set(effectId, runEffectCleanup);
-      pendingEffects.set(effectId, runEffect);
-    }
-
-    runUpdatePassOnRaf();
-  }
-
-  if (dependencies && byCursor[cursor]?.dependencies) {
-    if (dependencies.some((dependency, i) => dependency !== byCursor[cursor].dependencies![i])) {
-      if (DEBUG && debugKey) {
-        const causedBy = dependencies.reduce((res, newValue, i) => {
-          const prevValue = byCursor[cursor].dependencies![i];
-          if (newValue !== prevValue) {
-            res.push(`${i}: ${prevValue} => ${newValue}`);
-          }
-
-          return res;
-        }, []);
-
-        // eslint-disable-next-line no-console
-        console.log(`[Teact] Effect "${debugKey}" caused by dependencies.`, causedBy.join(', '));
-      }
-
-      schedule();
-    }
-  } else {
-    if (debugKey) {
-      // eslint-disable-next-line no-console
-      console.log(`[Teact] Effect "${debugKey}" caused by missing dependencies.`);
-    }
-
-    schedule();
-  }
-
-  const isFirstRun = !byCursor[cursor];
-
-  byCursor[cursor] = {
-    ...byCursor[cursor],
-    dependencies,
-    schedule,
-  };
-
-  function setupSignals() {
-    const cleanups = dependencies?.filter(isSignal).map((signal, i) => signal.subscribe(() => {
-      if (debugKey) {
-        // eslint-disable-next-line no-console
-        console.log(`[Teact] Effect "${debugKey}" caused by signal #${i} new value:`, signal());
-      }
-
-      byCursor[cursor].schedule();
-    }));
-
-    if (!cleanups?.length) {
-      return undefined;
-    }
-
-    return () => {
-      for (const cleanup of cleanups) {
-        cleanup();
-      }
-    };
-  }
-
-  if (isFirstRun) {
-    byCursor[cursor].releaseSignals = setupSignals();
-  }
-
-  renderingInstance.hooks.effects.cursor++;
+  runUpdatePassOnRaf();
 }
 
 export function useEffect(effect: Effect, dependencies?: readonly any[], debugKey?: string) {
@@ -803,6 +819,26 @@ export function useEffect(effect: Effect, dependencies?: readonly any[], debugKe
 
 export function useLayoutEffect(effect: Effect, dependencies?: readonly any[], debugKey?: string) {
   return useEffectBase(true, effect, dependencies, debugKey);
+}
+
+export function useUnmountCleanup(cleanup: NoneToVoidFunction) {
+  if (!renderingInstance.hooks) {
+    renderingInstance.hooks = {};
+  }
+
+  if (!renderingInstance.hooks.effects) {
+    renderingInstance.hooks.effects = { cursor: 0, byCursor: [] };
+  }
+
+  const { cursor, byCursor } = renderingInstance.hooks.effects;
+
+  if (!byCursor[cursor]) {
+    byCursor[cursor] = {
+      cleanup,
+    };
+  }
+
+  renderingInstance.hooks.effects.cursor++;
 }
 
 export function useMemo<T extends any>(

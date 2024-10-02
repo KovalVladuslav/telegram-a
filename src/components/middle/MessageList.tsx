@@ -1,20 +1,15 @@
 import type { FC } from '../../lib/teact/teact';
 import React, {
-  memo,
-  useEffect,
-  useMemo,
-  useRef,
+  beginHeavyAnimation, memo, useEffect, useMemo, useRef,
 } from '../../lib/teact/teact';
 import { addExtraClass, removeExtraClass } from '../../lib/teact/teact-dom';
 import { getActions, getGlobal, withGlobal } from '../../global';
 
 import type {
-  ApiChatFullInfo,
-  ApiMessage, ApiRestrictionReason, ApiTopic,
+  ApiChatFullInfo, ApiMessage, ApiRestrictionReason, ApiTopic,
 } from '../../api/types';
 import type { MessageListType } from '../../global/types';
-import type { Signal } from '../../util/signals';
-import type { PinnedIntersectionChangedCallback } from './hooks/usePinnedMessage';
+import type { OnIntersectPinnedMessage } from './hooks/usePinnedMessage';
 import { MAIN_THREAD_ID } from '../../api/types';
 import { LoadMoreDirection, type ThreadId } from '../../types';
 
@@ -53,6 +48,7 @@ import {
   selectScrollOffset,
   selectTabState,
   selectThreadInfo,
+  selectTopic,
   selectUserFullInfo,
 } from '../../global/selectors';
 import animateScroll, { isAnimatingScroll, restartCurrentScrollAnimation } from '../../util/animateScroll';
@@ -66,7 +62,6 @@ import { preventMessageInputBlur } from './helpers/preventMessageInputBlur';
 
 import useInterval from '../../hooks/schedulers/useInterval';
 import useEffectWithPrevDeps from '../../hooks/useEffectWithPrevDeps';
-import { dispatchHeavyAnimationEvent } from '../../hooks/useHeavyAnimationCheck';
 import useLastCallback from '../../hooks/useLastCallback';
 import useLayoutEffectWithPrevDeps from '../../hooks/useLayoutEffectWithPrevDeps';
 import useNativeCopySelectedMessages from '../../hooks/useNativeCopySelectedMessages';
@@ -97,8 +92,7 @@ type OwnProps = {
   hasTools?: boolean;
   withBottomShift?: boolean;
   withDefaultBg: boolean;
-  onPinnedIntersectionChange: PinnedIntersectionChangedCallback;
-  getForceNextPinnedInHeader: Signal<boolean | undefined>;
+  onIntersectPinnedMessage: OnIntersectPinnedMessage;
   isContactRequirePremium?: boolean;
 };
 
@@ -184,11 +178,10 @@ const MessageList: FC<OwnProps & StateProps> = ({
   noMessageSendingAnimation,
   isServiceNotificationsChat,
   currentUserId,
-  getForceNextPinnedInHeader,
   isContactRequirePremium,
   areAdsEnabled,
   channelJoinInfo,
-  onPinnedIntersectionChange,
+  onIntersectPinnedMessage,
   onScrollDownToggle,
   onNotchToggle,
 }) => {
@@ -417,9 +410,10 @@ const MessageList: FC<OwnProps & StateProps> = ({
 
     runDebouncedForScroll(() => {
       const global = getGlobal();
-      const forceNextPinnedInHeader = getForceNextPinnedInHeader() && !selectTabState(global).focusedMessage?.chatId;
-      if (forceNextPinnedInHeader) {
-        onPinnedIntersectionChange({ hasScrolled: true });
+
+      const isFocusing = Boolean(selectTabState(global).focusedMessage?.chatId);
+      if (!isFocusing) {
+        onIntersectPinnedMessage({ shouldCancelWaiting: true });
       }
 
       if (!container.parentElement) {
@@ -629,7 +623,7 @@ const MessageList: FC<OwnProps & StateProps> = ({
 
   useEffectWithPrevDeps(([prevIsSelectModeActive]) => {
     if (prevIsSelectModeActive !== undefined) {
-      dispatchHeavyAnimationEvent(SELECT_MODE_ANIMATION_DURATION + ANIMATION_END_DELAY);
+      beginHeavyAnimation(SELECT_MODE_ANIMATION_DURATION + ANIMATION_END_DELAY);
     }
   }, [isSelectModeActive]);
 
@@ -730,7 +724,7 @@ const MessageList: FC<OwnProps & StateProps> = ({
           noAppearanceAnimation={!messageGroups || !shouldAnimateAppearanceRef.current}
           onScrollDownToggle={onScrollDownToggle}
           onNotchToggle={onNotchToggle}
-          onPinnedIntersectionChange={onPinnedIntersectionChange}
+          onIntersectPinnedMessage={onIntersectPinnedMessage}
         />
       ) : (
         <Loading color="white" backgroundColor="dark" />
@@ -772,7 +766,7 @@ export default memo(withGlobal<OwnProps>(
 
     const chatBot = selectBot(global, chatId);
 
-    const topic = chat.topics?.[threadId];
+    const topic = selectTopic(global, chatId, threadId);
     const chatFullInfo = !isUserId(chatId) ? selectChatFullInfo(global, chatId) : undefined;
     const isEmptyThread = !selectThreadInfo(global, chatId, threadId)?.messagesCount;
 

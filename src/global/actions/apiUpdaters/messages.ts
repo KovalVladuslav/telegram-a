@@ -78,6 +78,7 @@ import {
   selectThreadByMessage,
   selectThreadIdFromMessage,
   selectThreadInfo,
+  selectTopic,
   selectTopicFromMessage,
   selectViewportIds,
 } from '../../selectors';
@@ -423,33 +424,31 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
       break;
     }
 
-    case 'updateThreadInfos': {
+    case 'updateThreadInfo': {
       const {
-        threadInfoUpdates,
+        threadInfo,
       } = update;
 
-      global = updateThreadInfos(global, threadInfoUpdates);
-      threadInfoUpdates.forEach((threadInfo) => {
-        const { chatId, threadId } = threadInfo;
-        if (!chatId || !threadId) return;
+      global = updateThreadInfos(global, [threadInfo]);
+      const { chatId, threadId } = threadInfo;
+      if (!chatId || !threadId) return;
 
-        const chat = selectChat(global, chatId);
-        const currentThreadInfo = selectThreadInfo(global, chatId, threadId);
-        if (chat?.isForum && threadInfo.lastReadInboxMessageId !== currentThreadInfo?.lastReadInboxMessageId) {
-          actions.loadTopicById({ chatId, topicId: Number(threadId) });
-        }
+      const chat = selectChat(global, chatId);
+      const currentThreadInfo = selectThreadInfo(global, chatId, threadId);
+      if (chat?.isForum && threadInfo.lastReadInboxMessageId !== currentThreadInfo?.lastReadInboxMessageId) {
+        actions.loadTopicById({ chatId, topicId: Number(threadId) });
+      }
 
-        // Update reply thread last read message id if already read in main thread
-        if (!chat?.isForum) {
-          const lastReadInboxMessageId = chat?.lastReadInboxMessageId;
-          const lastReadInboxMessageIdInThread = threadInfo.lastReadInboxMessageId || lastReadInboxMessageId;
-          if (lastReadInboxMessageId && lastReadInboxMessageIdInThread) {
-            global = updateThreadInfo(global, chatId, threadId, {
-              lastReadInboxMessageId: Math.max(lastReadInboxMessageIdInThread, lastReadInboxMessageId),
-            });
-          }
+      // Update reply thread last read message id if already read in main thread
+      if (!chat?.isForum) {
+        const lastReadInboxMessageId = chat?.lastReadInboxMessageId;
+        const lastReadInboxMessageIdInThread = threadInfo.lastReadInboxMessageId || lastReadInboxMessageId;
+        if (lastReadInboxMessageId && lastReadInboxMessageIdInThread) {
+          global = updateThreadInfo(global, chatId, threadId, {
+            lastReadInboxMessageId: Math.max(lastReadInboxMessageIdInThread, lastReadInboxMessageId),
+          });
         }
-      });
+      }
       setGlobal(global);
 
       break;
@@ -1063,7 +1062,7 @@ export function deleteMessages<T extends GlobalState>(
         isDeleting: true,
       });
 
-      if (chat.topics?.[id]) {
+      if (selectTopic(global, chatId, id)) {
         global = deleteTopic(global, chatId, id);
       }
 
@@ -1093,7 +1092,12 @@ export function deleteMessages<T extends GlobalState>(
       if (!threadInfo?.lastMessageId || !idsSet.has(threadInfo.lastMessageId)) return;
 
       const newLastMessage = findLastMessage(global, chatId, threadId);
-      if (!newLastMessage) return;
+      if (!newLastMessage) {
+        if (chat.isForum && threadId !== MAIN_THREAD_ID) {
+          actions.loadTopicById({ chatId, topicId: Number(threadId) });
+        }
+        return;
+      }
 
       if (threadId === MAIN_THREAD_ID) {
         global = updateChatLastMessage(global, chatId, newLastMessage, true);

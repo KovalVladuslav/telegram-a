@@ -1,6 +1,6 @@
 import type { FC } from '../../lib/teact/teact';
 import React, {
-  memo, useCallback, useEffect, useMemo, useRef,
+  memo, useCallback, useEffect, useMemo, useRef, useUnmountCleanup,
 } from '../../lib/teact/teact';
 import { getActions, getGlobal, withGlobal } from '../../global';
 
@@ -10,7 +10,7 @@ import type {
 import type { MessageListType } from '../../global/types';
 import type { ObserveFn } from '../../hooks/useIntersectionObserver';
 import type { FocusDirection, ThreadId } from '../../types';
-import type { PinnedIntersectionChangedCallback } from './hooks/usePinnedMessage';
+import type { OnIntersectPinnedMessage } from './hooks/usePinnedMessage';
 
 import { getChatTitle, getMessageHtmlId, isJoinedChannelMessage } from '../../global/helpers';
 import { getMessageReplyInfo } from '../../global/helpers/replies';
@@ -35,6 +35,7 @@ import useContextMenuHandlers from '../../hooks/useContextMenuHandlers';
 import useEnsureMessage from '../../hooks/useEnsureMessage';
 import useFlag from '../../hooks/useFlag';
 import { useIsIntersecting, useOnIntersect } from '../../hooks/useIntersectionObserver';
+import useLang from '../../hooks/useLang';
 import useOldLang from '../../hooks/useOldLang';
 import useShowTransitionDeprecated from '../../hooks/useShowTransitionDeprecated';
 import useFocusMessage from './message/hooks/useFocusMessage';
@@ -57,7 +58,7 @@ type OwnProps = {
   isLastInList?: boolean;
   isInsideTopic?: boolean;
   memoFirstUnreadIdRef?: { current: number | undefined };
-  onPinnedIntersectionChange?: PinnedIntersectionChangedCallback;
+  onIntersectPinnedMessage?: OnIntersectPinnedMessage;
 };
 
 type StateProps = {
@@ -102,13 +103,19 @@ const ActionMessage: FC<OwnProps & StateProps> = ({
   observeIntersectionForReading,
   observeIntersectionForLoading,
   observeIntersectionForPlaying,
-  onPinnedIntersectionChange,
+  onIntersectPinnedMessage,
 }) => {
   const {
-    openPremiumModal, requestConfetti, checkGiftCode, getReceipt, openStarsTransactionFromGift,
+    openPremiumModal,
+    requestConfetti,
+    checkGiftCode,
+    getReceipt,
+    openStarsTransactionFromGift,
+    openPrizeStarsTransactionFromGiveaway,
   } = getActions();
 
   const oldLang = useOldLang();
+  const lang = useLang();
 
   // eslint-disable-next-line no-null/no-null
   const ref = useRef<HTMLDivElement>(null);
@@ -121,13 +128,11 @@ const ActionMessage: FC<OwnProps & StateProps> = ({
   );
   useFocusMessage(ref, message.chatId, isFocused, focusDirection, noFocusHighlight, isJustAdded);
 
-  useEffect(() => {
-    if (!message.isPinned) return undefined;
-
-    return () => {
-      onPinnedIntersectionChange?.({ viewportPinnedIdsToRemove: [message.id], isUnmount: true });
-    };
-  }, [onPinnedIntersectionChange, message.isPinned, message.id]);
+  useUnmountCleanup(() => {
+    if (message.isPinned) {
+      onIntersectPinnedMessage?.({ viewportPinnedIdsToRemove: [message.id] });
+    }
+  });
 
   const noAppearanceAnimation = appearanceOrder <= 0;
   const [isShown, markShown] = useFlag(noAppearanceAnimation);
@@ -136,6 +141,7 @@ const ActionMessage: FC<OwnProps & StateProps> = ({
   const isSuggestedAvatar = message.content.action?.type === 'suggestProfilePhoto' && message.content.action!.photo;
   const isJoinedMessage = isJoinedChannelMessage(message);
   const isStarsGift = message.content.action?.type === 'giftStars';
+  const isPrizeStars = message.content.action?.type === 'prizeStars';
 
   useEffect(() => {
     if (noAppearanceAnimation) {
@@ -216,6 +222,13 @@ const ActionMessage: FC<OwnProps & StateProps> = ({
     });
   };
 
+  const handlePrizeStarsClick = () => {
+    openPrizeStarsTransactionFromGiveaway({
+      chatId: message.chatId,
+      messageId: message.id,
+    });
+  };
+
   const handleGiftCodeClick = () => {
     const slug = message.content.action?.slug;
     if (!slug) return;
@@ -287,10 +300,14 @@ const ActionMessage: FC<OwnProps & StateProps> = ({
           {oldLang(isUnclaimed ? 'BoostingUnclaimedPrize' : 'BoostingCongratulations')}
         </strong>
         <span className="action-message-subtitle">
-          {targetChat && renderText(oldLang(isFromGiveaway ? 'BoostingReceivedGiftFrom' : isUnclaimed
-            ? 'BoostingReceivedPrizeFrom' : 'BoostingYouHaveUnclaimedPrize',
-          getChatTitle(oldLang, targetChat)),
-          ['simple_markdown'])}
+          {targetChat && renderText(
+            oldLang(
+              isFromGiveaway ? 'BoostingReceivedGiftFrom' : isUnclaimed
+                ? 'BoostingReceivedPrizeFrom' : 'BoostingYouHaveUnclaimedPrize',
+              getChatTitle(oldLang, targetChat),
+            ),
+            ['simple_markdown'],
+          )}
         </span>
         <span className="action-message-subtitle">
           {renderText(oldLang(
@@ -341,6 +358,50 @@ const ActionMessage: FC<OwnProps & StateProps> = ({
     );
   }
 
+  function renderPrizeStars() {
+    const isUnclaimed = message.content.action?.isUnclaimed;
+
+    return (
+      <span
+        className="action-message-gift action-message-gift-code"
+        tabIndex={0}
+        role="button"
+        onClick={handlePrizeStarsClick}
+      >
+        <AnimatedIconFromSticker
+          key={message.id}
+          sticker={starGiftSticker}
+          play={canPlayAnimatedEmojis}
+          noLoop
+          nonInteractive
+        />
+        <strong>
+          {oldLang(isUnclaimed ? 'BoostingUnclaimedPrize' : 'BoostingCongratulations')}
+        </strong>
+        <span className="action-message-subtitle">
+          {targetChat && renderText(oldLang(isUnclaimed
+            ? 'BoostingReceivedPrizeFrom' : 'BoostingYouHaveUnclaimedPrize', getChatTitle(oldLang, targetChat)),
+          ['simple_markdown'])}
+        </span>
+        <span className="action-message-subtitle">
+          {renderText(lang(
+            'PrizeCredits', {
+              count: (
+                <b>{formatInteger(message.content.action?.stars!)}</b>
+              ),
+            }, {
+              withNodes: true,
+            },
+          ), ['simple_markdown'])}
+        </span>
+        <span className="action-message-button">{
+          oldLang('ActionGiftPremiumView')
+        }
+        </span>
+      </span>
+    );
+  }
+
   const className = buildClassName(
     'ActionMessage message-list-item',
     isFocused && !noFocusHighlight && 'focused',
@@ -366,6 +427,7 @@ const ActionMessage: FC<OwnProps & StateProps> = ({
       {isPremiumGift && renderGift()}
       {isGiftCode && renderGiftCode()}
       {isStarsGift && renderStarsGift()}
+      {isPrizeStars && renderPrizeStars()}
       {isSuggestedAvatar && (
         <ActionMessageSuggestedAvatar message={message} renderContent={renderContent} />
       )}

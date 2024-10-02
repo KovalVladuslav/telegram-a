@@ -1539,6 +1539,12 @@ export interface LangPair {
   'GiftStarsOutgoing': {
     'user': string | number;
   };
+  'MiniAppsMoreTabs': {
+    'botName': string | number;
+  };
+  'PrizeCredits': {
+    'count': string | number;
+  };
 }
 
 export type LangKey = keyof LangPair;
