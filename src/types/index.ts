@@ -9,10 +9,12 @@ import type {
   ApiChatInviteImporter,
   ApiDocument,
   ApiExportedInvite,
+  ApiFakeType,
   ApiLanguage,
   ApiMessage,
   ApiPhoto,
   ApiReaction,
+  ApiReactionWithPaid,
   ApiStickerSet,
   ApiUser,
   ApiVideo,
@@ -274,7 +276,7 @@ export enum SettingsScreens {
 export type StickerSetOrReactionsSetOrRecent = Pick<ApiStickerSet, (
   'id' | 'accessHash' | 'title' | 'count' | 'stickers' | 'isEmoji' | 'installedDate' | 'isArchived' |
   'hasThumbnail' | 'hasStaticThumb' | 'hasAnimatedThumb' | 'hasVideoThumb' | 'thumbCustomEmojiId'
-)> & { reactions?: ApiReaction[] };
+)> & { reactions?: ApiReactionWithPaid[] };
 
 export enum LeftColumnContent {
   ChatList,
@@ -516,19 +518,25 @@ export type InlineBotSettings = {
 export type CustomPeerType = 'premium' | 'toBeDistributed' | 'contacts' | 'nonContacts'
 | 'groups' | 'channels' | 'bots' | 'excludeMuted' | 'excludeArchived' | 'excludeRead' | 'stars';
 
-export interface CustomPeer {
+export type CustomPeer = {
   isCustomPeer: true;
   key?: string | number;
-  titleKey: string;
   subtitleKey?: string;
-  avatarIcon: IconName;
+  avatarIcon?: IconName;
   isAvatarSquare?: boolean;
-  titleValue?: number;
   peerColorId?: number;
+  isVerified?: boolean;
+  fakeType?: ApiFakeType;
   customPeerAvatarColor?: string;
   withPremiumGradient?: boolean;
-}
+} & ({
+  titleKey: string;
+  title?: undefined;
+} | {
+  title: string;
+  titleKey?: undefined;
+});
 
-export interface UniqueCustomPeer extends CustomPeer {
-  type: CustomPeerType;
-}
+export type UniqueCustomPeer<T = CustomPeerType> = CustomPeer & {
+  type: T;
+};

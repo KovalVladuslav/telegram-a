@@ -19,6 +19,7 @@ import { getMessageKey, isLocalMessageId } from '../../../util/keys/messageKey';
 import { notifyAboutMessage } from '../../../util/notifications';
 import { onTickEnd } from '../../../util/schedulers';
 import {
+  addPaidReaction,
   checkIfHasUnreadReactions, getIsSavedDialog, getMessageContent, getMessageText, isActionMessage,
   isMessageLocal, isUserId,
 } from '../../helpers';
@@ -156,11 +157,11 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
       setGlobal(global);
 
       // Reload dialogs if chat is not present in the list
-      if (!selectIsChatListed(global, chatId)) {
+      if (!isLocal && !selectIsChatListed(global, chatId)) {
         actions.loadTopChats();
       }
 
-      if (selectIsChatWithSelf(global, chatId) && !isLocal) {
+      if (!isLocal && selectIsChatWithSelf(global, chatId)) {
         const savedDialogId = selectSavedDialogIdFromMessage(global, newMessage);
         if (savedDialogId && !selectIsChatListed(global, savedDialogId, 'saved')) {
           actions.requestSavedDialogUpdate({ chatId: savedDialogId });
@@ -357,6 +358,11 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
       global = updateChat(global, chatId, {
         lastReadInboxMessageId: message.id,
       });
+
+      // Reload dialogs if chat is not present in the list
+      if (!selectIsChatListed(global, chatId)) {
+        actions.loadTopChats();
+      }
 
       if (selectIsChatWithSelf(global, chatId)) {
         const savedDialogId = selectSavedDialogIdFromMessage(global, newMessage);
@@ -786,6 +792,12 @@ function updateReactions<T extends GlobalState>(
   // `updateMessageReactions` happens with an interval, so we try to avoid redundant global state updates
   if (currentReactions && areDeepEqual(reactions, currentReactions)) {
     return global;
+  }
+
+  const localPaidReaction = currentReactions?.results.find((r) => r.localAmount);
+  // Save local count on update, but reset if we sent reaction
+  if (localPaidReaction?.localAmount) {
+    reactions.results = addPaidReaction(reactions.results, localPaidReaction.localAmount);
   }
 
   global = updateChatMessage(global, chatId, id, { reactions });

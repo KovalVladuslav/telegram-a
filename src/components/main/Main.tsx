@@ -203,6 +203,7 @@ const Main = ({
     initMain,
     loadAnimatedEmojis,
     loadBirthdayNumbersStickers,
+    loadRestrictedEmojiStickers,
     loadNotificationSettings,
     loadNotificationExceptions,
     updateIsOnline,
@@ -247,6 +248,7 @@ const Main = ({
     loadStarStatus,
     loadAvailableEffects,
     loadTopBotApps,
+    loadPaidReactionPrivacy,
   } = getActions();
 
   if (DEBUG && !DEBUG_isLogged) {
@@ -326,10 +328,12 @@ const Main = ({
       loadPremiumGifts();
       loadAvailableEffects();
       loadBirthdayNumbersStickers();
+      loadRestrictedEmojiStickers();
       loadGenericEmojiEffects();
       loadSavedReactionTags();
       loadAuthorizations();
       loadTopBotApps();
+      loadPaidReactionPrivacy();
     }
   }, [isMasterTab, isSynced]);
 

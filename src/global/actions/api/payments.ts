@@ -14,10 +14,10 @@ import { isChatChannel, isChatSuperGroup } from '../../helpers';
 import {
   getPrizeStarsTransactionFromGiveaway,
   getRequestInputInvoice,
-  getStarsTransactionFromGift,
 } from '../../helpers/payments';
 import { addActionHandler, getGlobal, setGlobal } from '../../index';
 import {
+  appendStarsSubscriptions,
   appendStarsTransactions, closeInvoice,
   openStarsTransactionFromReceipt,
   openStarsTransactionModal,
@@ -38,6 +38,7 @@ import {
   selectChatMessage,
   selectPaymentFormId,
   selectPaymentInputInvoice, selectPaymentRequestId,
+  selectPeer,
   selectProviderPublicToken,
   selectProviderPublishableKey,
   selectSmartGlocalCredentials,
@@ -271,6 +272,10 @@ addActionHandler('sendStarPaymentForm', async (global, actions, payload): Promis
   global = closeInvoice(global, tabId);
   setGlobal(global);
 
+  if ('channelId' in result) {
+    actions.openChat({ id: result.channelId, tabId });
+  }
+
   actions.apiUpdate({
     '@type': 'updatePaymentStateCompleted',
     inputInvoice,
@@ -467,6 +472,8 @@ addActionHandler('openGiveawayModal', async (global, actions, payload): Promise<
     return;
   }
 
+  global = getGlobal();
+
   const isOpen = Boolean(chatId);
 
   global = updateTabState(global, {
@@ -535,22 +542,6 @@ addActionHandler('closeStarsGiftingModal', (global, actions, payload): ActionRet
   }, tabId);
 });
 
-addActionHandler('openStarsTransactionFromGift', (global, actions, payload): ActionReturnType => {
-  const {
-    chatId,
-    messageId,
-    tabId = getCurrentTabId(),
-  } = payload || {};
-
-  const message = selectChatMessage(global, chatId, messageId);
-  if (!message) return undefined;
-
-  const transaction = getStarsTransactionFromGift(message);
-  if (!transaction) return undefined;
-
-  return openStarsTransactionModal(global, transaction, tabId);
-});
-
 addActionHandler('openPrizeStarsTransactionFromGiveaway', (global, actions, payload): ActionReturnType => {
   const {
     chatId,
@@ -574,9 +565,9 @@ addActionHandler('openPremiumGiftModal', async (global, actions, payload): Promi
   const result = await callApi('fetchPremiumPromo');
   if (!result) return;
 
-  global = getGlobal();
-
   const gifts = await callApi('getPremiumGiftCodeOptions', {});
+
+  global = getGlobal();
 
   global = updateTabState(global, {
     giftModal: {
@@ -603,6 +594,8 @@ addActionHandler('openStarsGiftModal', async (global, actions, payload): Promise
   } = payload || {};
 
   const starsGiftOptions = await callApi('getStarsGiftOptions', {});
+
+  global = getGlobal();
 
   global = updateTabState(global, {
     starsGiftModal: {
@@ -1056,11 +1049,18 @@ addActionHandler('loadStarStatus', async (global): Promise<void> => {
         inbound: undefined,
         outbound: undefined,
       },
+      subscriptions: undefined,
     },
   };
+
   if (status.history) {
-    global = appendStarsTransactions(global, 'all', status.history, status.nextOffset);
+    global = appendStarsTransactions(global, 'all', status.history, status.nextHistoryOffset);
   }
+
+  if (status.subscriptions) {
+    global = appendStarsSubscriptions(global, status.subscriptions, status.nextSubscriptionOffset);
+  }
+
   setGlobal(global);
 });
 
@@ -1088,4 +1088,55 @@ addActionHandler('loadStarsTransactions', async (global, actions, payload): Prom
     global = appendStarsTransactions(global, type, result.history, result.nextOffset);
   }
   setGlobal(global);
+});
+
+addActionHandler('loadStarsSubscriptions', async (global): Promise<void> => {
+  const subscriptions = global.stars?.subscriptions;
+  const offset = subscriptions?.nextOffset;
+  if (subscriptions && !offset) return; // Already loaded all
+
+  const result = await callApi('fetchStarsSubscriptions', {
+    offset: offset || '',
+  });
+
+  if (!result) {
+    return;
+  }
+
+  global = getGlobal();
+
+  global = updateStarsBalance(global, result.balance);
+  global = appendStarsSubscriptions(global, result.subscriptions, result.nextOffset);
+  setGlobal(global);
+});
+
+addActionHandler('changeStarsSubscription', async (global, actions, payload): Promise<void> => {
+  const { peerId, id, isCancelled } = payload;
+
+  const peer = peerId ? selectPeer(global, peerId) : undefined;
+
+  if (peerId && !peer) return;
+
+  await callApi('changeStarsSubscription', {
+    peer,
+    subscriptionId: id,
+    isCancelled,
+  });
+
+  actions.loadStarStatus();
+});
+
+addActionHandler('fulfillStarsSubscription', async (global, actions, payload): Promise<void> => {
+  const { peerId, id } = payload;
+
+  const peer = peerId ? selectPeer(global, peerId) : undefined;
+
+  if (peerId && !peer) return;
+
+  await callApi('fulfillStarsSubscription', {
+    peer,
+    subscriptionId: id,
+  });
+
+  actions.loadStarStatus();
 });

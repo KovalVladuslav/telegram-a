@@ -1,18 +1,22 @@
 import type { ActionReturnType } from '../../types';
 
 import { getCurrentTabId } from '../../../util/establishMultitabRole';
+import { getStarsTransactionFromGift } from '../../helpers/payments';
 import { addActionHandler } from '../../index';
 import {
   clearPayment, closeInvoice, openStarsTransactionModal, updatePayment,
 } from '../../reducers';
 import { updateTabState } from '../../reducers/tabs';
-import { selectTabState } from '../../selectors';
+import { selectChatMessage, selectTabState } from '../../selectors';
 
 addActionHandler('closePaymentModal', (global, actions, payload): ActionReturnType => {
   const { tabId = getCurrentTabId() } = payload || {};
   const payment = selectTabState(global, tabId).payment;
   const status = payment.status || 'cancelled';
-  const originPayment = selectTabState(global, tabId).starsBalanceModal?.originPayment;
+  const starsBalanceModal = selectTabState(global, tabId).starsBalanceModal;
+  const originPayment = starsBalanceModal?.originPayment;
+  const originReaction = starsBalanceModal?.originReaction;
+
   global = clearPayment(global, tabId);
   global = closeInvoice(global, tabId);
   global = updateTabState(global, {
@@ -20,7 +24,7 @@ addActionHandler('closePaymentModal', (global, actions, payload): ActionReturnTy
       ...selectTabState(global, tabId).payment,
       status,
     },
-    ...(originPayment && {
+    ...((originPayment || originReaction) && {
       starsBalanceModal: undefined,
     }),
   }, tabId);
@@ -31,6 +35,16 @@ addActionHandler('closePaymentModal', (global, actions, payload): ActionReturnTy
     global = updateTabState(global, {
       isStarPaymentModalOpen: true,
     }, tabId);
+  }
+
+  // Send reaction
+  if (originReaction) {
+    actions.sendPaidReaction({
+      chatId: originReaction.chatId,
+      messageId: originReaction.messageId,
+      forcedAmount: originReaction.amount,
+      tabId,
+    });
   }
   return global;
 });
@@ -56,13 +70,17 @@ addActionHandler('closeGiftCodeModal', (global, actions, payload): ActionReturnT
 });
 
 addActionHandler('openStarsBalanceModal', (global, actions, payload): ActionReturnType => {
-  const { originPayment, tabId = getCurrentTabId() } = payload || {};
+  const { originPayment, originReaction, tabId = getCurrentTabId() } = payload || {};
 
   global = clearPayment(global, tabId);
+
+  // Always refresh status on opening
+  actions.loadStarStatus();
 
   return updateTabState(global, {
     starsBalanceModal: {
       originPayment,
+      originReaction,
     },
   }, tabId);
 });
@@ -80,10 +98,44 @@ addActionHandler('openStarsTransactionModal', (global, actions, payload): Action
   return openStarsTransactionModal(global, transaction, tabId);
 });
 
+addActionHandler('openStarsTransactionFromGift', (global, actions, payload): ActionReturnType => {
+  const {
+    chatId,
+    messageId,
+    tabId = getCurrentTabId(),
+  } = payload || {};
+
+  const message = selectChatMessage(global, chatId, messageId);
+  if (!message) return undefined;
+
+  const transaction = getStarsTransactionFromGift(message);
+  if (!transaction) return undefined;
+
+  return openStarsTransactionModal(global, transaction, tabId);
+});
+
 addActionHandler('closeStarsTransactionModal', (global, actions, payload): ActionReturnType => {
   const { tabId = getCurrentTabId() } = payload || {};
 
   return updateTabState(global, {
     starsTransactionModal: undefined,
+  }, tabId);
+});
+
+addActionHandler('openStarsSubscriptionModal', (global, actions, payload): ActionReturnType => {
+  const { subscription, tabId = getCurrentTabId() } = payload;
+
+  return updateTabState(global, {
+    starsSubscriptionModal: {
+      subscription,
+    },
+  }, tabId);
+});
+
+addActionHandler('closeStarsSubscriptionModal', (global, actions, payload): ActionReturnType => {
+  const { tabId = getCurrentTabId() } = payload || {};
+
+  return updateTabState(global, {
+    starsSubscriptionModal: undefined,
   }, tabId);
 });

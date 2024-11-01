@@ -2,6 +2,7 @@ import type { ThreadId } from '../../types';
 import type { ApiWebDocument } from './bots';
 import type { ApiGroupCall, PhoneCallAction } from './calls';
 import type { ApiChat, ApiPeerColor } from './chats';
+import type { ApiChatInviteInfo } from './misc';
 import type {
   ApiInputStorePaymentPurpose,
   ApiPremiumGiftCodeOption,
@@ -263,8 +264,15 @@ export type ApiInputInvoiceStarsGiveaway = {
   users: number;
 };
 
+export type ApiInputInvoiceChatInviteSubscription = {
+  type: 'chatInviteSubscription';
+  hash: string;
+  inviteInfo: ApiChatInviteInfo;
+};
+
 export type ApiInputInvoice = ApiInputInvoiceMessage | ApiInputInvoiceSlug | ApiInputInvoiceGiveaway
-| ApiInputInvoiceGiftCode | ApiInputInvoiceStarsGift | ApiInputInvoiceStars | ApiInputInvoiceStarsGiveaway;
+| ApiInputInvoiceGiftCode | ApiInputInvoiceStarsGift | ApiInputInvoiceStars | ApiInputInvoiceStarsGiveaway
+| ApiInputInvoiceChatInviteSubscription;
 
 /* Used for Invoice request */
 export type ApiRequestInputInvoiceMessage = {
@@ -294,8 +302,14 @@ export type ApiRequestInputInvoiceStarsGiveaway = {
   purpose: ApiInputStorePaymentPurpose;
 };
 
+export type ApiRequestInputInvoiceChatInviteSubscription = {
+  type: 'chatInviteSubscription';
+  hash: string;
+};
+
 export type ApiRequestInputInvoice = ApiRequestInputInvoiceMessage | ApiRequestInputInvoiceSlug
-| ApiRequestInputInvoiceGiveaway | ApiRequestInputInvoiceStars | ApiRequestInputInvoiceStarsGiveaway;
+| ApiRequestInputInvoiceGiveaway | ApiRequestInputInvoiceStars | ApiRequestInputInvoiceStarsGiveaway
+| ApiRequestInputInvoiceChatInviteSubscription;
 
 export interface ApiInvoice {
   mediaType: 'invoice';
@@ -601,7 +615,7 @@ export type MediaContent = {
   text?: ApiFormattedText;
   photo?: ApiPhoto;
   video?: ApiVideo;
-  altVideo?: ApiVideo;
+  altVideos?: ApiVideo[];
   document?: ApiDocument;
   sticker?: ApiSticker;
   contact?: ApiContact;
@@ -688,6 +702,7 @@ export interface ApiReactions {
   areTags?: boolean;
   results: ApiReactionCount[];
   recentReactions?: ApiPeerReaction[];
+  topReactors?: ApiMessageReactor[];
 }
 
 export interface ApiPeerReaction {
@@ -699,10 +714,20 @@ export interface ApiPeerReaction {
   addedDate: number;
 }
 
+export interface ApiMessageReactor {
+  isTop?: true;
+  isMe?: true;
+  count: number;
+  isAnonymous?: true;
+  peerId?: string;
+}
+
 export interface ApiReactionCount {
   chosenOrder?: number;
   count: number;
-  reaction: ApiReaction;
+  reaction: ApiReactionWithPaid;
+  localAmount?: number;
+  localIsPrivate?: boolean;
 }
 
 export interface ApiAvailableReaction {
@@ -741,16 +766,23 @@ type ApiChatReactionsSome = {
 export type ApiChatReactions = ApiChatReactionsAll | ApiChatReactionsSome;
 
 export type ApiReactionEmoji = {
+  type: 'emoji';
   emoticon: string;
 };
 
 export type ApiReactionCustomEmoji = {
+  type: 'custom';
   documentId: string;
 };
 
-export type ApiReaction = ApiReactionEmoji | ApiReactionCustomEmoji;
+export type ApiReactionPaid = {
+  type: 'paid';
+};
 
-export type ApiReactionKey = `${string}-${string}`;
+export type ApiReaction = ApiReactionEmoji | ApiReactionCustomEmoji;
+export type ApiReactionWithPaid = ApiReaction | ApiReactionPaid;
+
+export type ApiReactionKey = `${string}-${string}` | 'paid' | 'unsupported';
 
 export type ApiSavedReactionTag = {
   reaction: ApiReaction;

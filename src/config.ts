@@ -51,7 +51,7 @@ export const MEDIA_PROGRESSIVE_CACHE_DISABLED = false;
 export const MEDIA_PROGRESSIVE_CACHE_NAME = 'tt-media-progressive';
 export const MEDIA_CACHE_MAX_BYTES = 512 * 1024; // 512 KB
 export const CUSTOM_BG_CACHE_NAME = 'tt-custom-bg';
-export const LANG_CACHE_NAME = 'tt-lang-packs-v42';
+export const LANG_CACHE_NAME = 'tt-lang-packs-v43';
 export const ASSET_CACHE_NAME = 'tt-assets';
 export const AUTODOWNLOAD_FILESIZE_MB_LIMITS = [1, 5, 10, 50, 100, 500];
 export const DATA_BROADCAST_CHANNEL_NAME = 'tt-global';
@@ -222,6 +222,7 @@ export const MENU_TRANSITION_DURATION = 200;
 export const SLIDE_TRANSITION_DURATION = 450;
 
 export const BIRTHDAY_NUMBERS_SET = 'FestiveFontEmoji';
+export const RESTRICTED_EMOJI_SET = 'RestrictedEmoji';
 
 export const VIDEO_WEBM_TYPE = 'video/webm';
 export const GIF_MIME_TYPE = 'image/gif';
@@ -295,6 +296,7 @@ export const COUNTRIES_WITH_12H_TIME_FORMAT = new Set(['AU', 'BD', 'CA', 'CO', '
 export const API_CHAT_TYPES = ['bots', 'channels', 'chats', 'users'] as const;
 
 export const HEART_REACTION: ApiReactionEmoji = {
+  type: 'emoji',
   emoticon: '❤',
 };
 

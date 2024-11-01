@@ -660,6 +660,7 @@ async function saveDraft<T extends GlobalState>({
     isLocal: true,
   } : undefined;
 
+  global = getGlobal();
   global = replaceThreadParam(global, chatId, threadId, 'draft', newDraft);
   if (!noLocalTimeUpdate) {
     global = updateChat(global, chatId, { draftDate: newDraft?.date });
@@ -2092,6 +2093,11 @@ addActionHandler('loadFactChecks', async (global, actions, payload): Promise<voi
   });
 
   setGlobal(global);
+});
+
+addActionHandler('loadPaidReactionPrivacy', (): ActionReturnType => {
+  callApi('fetchPaidReactionPrivacy');
+  return undefined;
 });
 
 addActionHandler('loadOutboxReadDate', async (global, actions, payload): Promise<void> => {

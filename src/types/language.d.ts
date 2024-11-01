@@ -1513,7 +1513,7 @@ export interface LangPair {
   'RemoveEffect': undefined;
   'ReplyInPrivateMessage': undefined;
   'ProfileOpenAppAbout': {
-    'terms': string;
+    'terms': string | number;
   };
   'ProfileOpenAppTerms': undefined;
   'ProfileBotOpenAppInfoLink': undefined;
@@ -1533,18 +1533,42 @@ export interface LangPair {
     'user': string | number;
     'link': string | number;
   };
-  'CreditsBoxOutAbout': {
+  'StarsTransactionTOS': {
     'link': string | number;
   };
+  'StarsTransactionTOSLinkText': undefined;
+  'StarsTransactionTOSLink': undefined;
   'GiftStarsOutgoing': {
     'user': string | number;
   };
+  'SendPaidReaction': {
+    'amount': string | number;
+  };
+  'StarsReactionTerms': {
+    'link': string | number;
+  };
+  'StarsReactionLinkText': undefined;
+  'StarsReactionLink': undefined;
   'MiniAppsMoreTabs': {
     'botName': string | number;
+    'count': string | number;
   };
   'PrizeCredits': {
     'count': string | number;
   };
+  'StarsSubscribeText': {
+    'chat': string | number;
+    'amount': string | number;
+  };
+  'StarsSubscribeInfo': {
+    'link': string | number;
+  };
+  'StarsSubscribeInfoLinkText': undefined;
+  'StarsSubscribeInfoLink': undefined;
+  'StarsPerMonth': {
+    'amount': string | number;
+  };
+
 }
 
 export type LangKey = keyof LangPair;

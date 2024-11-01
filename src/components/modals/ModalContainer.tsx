@@ -8,15 +8,18 @@ import { pick } from '../../util/iteratees';
 
 import AttachBotInstallModal from './attachBotInstall/AttachBotInstallModal.async';
 import BoostModal from './boost/BoostModal.async';
+import ChatInviteModal from './chatInvite/ChatInviteModal.async';
 import ChatlistModal from './chatlist/ChatlistModal.async';
 import CollectibleInfoModal from './collectible/CollectibleInfoModal.async';
 import GiftCodeModal from './giftcode/GiftCodeModal.async';
 import InviteViaLinkModal from './inviteViaLink/InviteViaLinkModal.async';
 import MapModal from './map/MapModal.async';
 import OneTimeMediaModal from './oneTimeMedia/OneTimeMediaModal.async';
+import PaidReactionModal from './paidReaction/PaidReactionModal.async';
 import ReportAdModal from './reportAd/ReportAdModal.async';
 import StarsBalanceModal from './stars/StarsBalanceModal.async';
 import StarsPaymentModal from './stars/StarsPaymentModal.async';
+import StarsSubscriptionModal from './stars/subscription/StarsSubscriptionModal.async';
 import StarsTransactionInfoModal from './stars/transaction/StarsTransactionModal.async';
 import UrlAuthModal from './urlAuth/UrlAuthModal.async';
 import WebAppModal from './webApp/WebAppModal.async';
@@ -35,8 +38,12 @@ type ModalKey = keyof Pick<TabState,
 'reportAdModal' |
 'starsBalanceModal' |
 'isStarPaymentModalOpen' |
+'starsTransactionModal' |
+'paidReactionModal' |
 'webApps' |
-'starsTransactionModal'
+'starsTransactionModal' |
+'chatInviteModal' |
+'starsSubscriptionModal'
 >;
 
 type StateProps = {
@@ -66,6 +73,9 @@ const MODALS: ModalRegistry = {
   isStarPaymentModalOpen: StarsPaymentModal,
   starsBalanceModal: StarsBalanceModal,
   starsTransactionModal: StarsTransactionInfoModal,
+  chatInviteModal: ChatInviteModal,
+  paidReactionModal: PaidReactionModal,
+  starsSubscriptionModal: StarsSubscriptionModal,
 };
 const MODAL_KEYS = Object.keys(MODALS) as ModalKey[];
 const MODAL_ENTRIES = Object.entries(MODALS) as Entries<ModalRegistry>;
