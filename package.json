@@ -4,6 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "deploy:mini": "rsync -a --delete --progress --rsh='ssh -p 3333' --exclude='*/node_modules/' ./dist root@185.198.167.105:/var/www/tg",
     "dev": "cross-env APP_ENV=development webpack serve --mode development",
     "dev:mocked": "cross-env APP_ENV=test APP_MOCKED_CLIENT=1 webpack serve --mode development --port 1235",
     "build:dev": "webpack --mode development && bash ./deploy/copy_to_dist.sh",

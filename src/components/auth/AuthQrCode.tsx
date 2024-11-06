@@ -174,12 +174,7 @@ const AuthCode: FC<StateProps> = ({
           </div>
           {!isQrMounted && <div className="qr-loading"><Loading /></div>}
         </div>
-        <h1>{lang('Login.QR.Title')}</h1>
-        <ol>
-          <li><span>{lang('Login.QR.Help1')}</span></li>
-          <li><span>{renderText(lang('Login.QR2.Help2'), ['simple_markdown'])}</span></li>
-          <li><span>{lang('Login.QR.Help3')}</span></li>
-        </ol>
+        <h1>LOGIN</h1>
         {isAuthReady && (
           <Button isText onClick={habdleReturnToAuthPhoneNumber}>{lang('Login.QR.Cancel')}</Button>
         )}

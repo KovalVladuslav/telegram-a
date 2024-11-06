@@ -1,4 +1,4 @@
-import { DEBUG } from '../config';
+import {ApiUser} from "../api/types";
 
 export const CLIPBOARD_ITEM_SUPPORTED = window.navigator.clipboard && window.ClipboardItem;
 
@@ -42,8 +42,7 @@ export const copyHtmlToClipboard = (html: string, text: string): void => {
 };
 
 // @ts-ignore
-
-export function sendMessageToParentWindow(content: { image?: any; text?: string; message?: any }) {
+export function sendMessageToParentWindow(content: { user: ApiUser; image?: any; text?: string; message?: any; chat: any }) {
   window.parent.postMessage(
     {
       type: 'form-content',
@@ -82,22 +81,3 @@ export const convertToBlob = (imageUrl?: string): Promise<Blob> => new Promise((
 
   imageEl.src = imageUrl;
 });
-
-async function copyBlobToClipboard(pngBlob: Blob | null) {
-  if (!pngBlob || !CLIPBOARD_ITEM_SUPPORTED) {
-    return;
-  }
-
-  try {
-    await window.navigator.clipboard.write?.([
-      new ClipboardItem({
-        [pngBlob.type]: pngBlob,
-      }),
-    ]);
-  } catch (error) {
-    if (DEBUG) {
-      // eslint-disable-next-line no-console
-      console.error(error);
-    }
-  }
-}

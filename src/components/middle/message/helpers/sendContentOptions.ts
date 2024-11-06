@@ -1,8 +1,12 @@
+import { getGlobal } from '../../../../global';
+
 import type { ApiMessage } from '../../../../api/types';
 import type { IconName } from '../../../../types/icons';
 import { ApiMediaFormat } from '../../../../api/types';
 
 import {
+  getDocumentMediaHash,
+  getMessageDocument,
   getMessageHtmlId,
   getMessagePhoto,
   getMessageText,
@@ -12,11 +16,11 @@ import {
   hasMediaLocalBlobUrl,
 } from '../../../../global/helpers';
 import { getMessageTextWithSpoilers } from '../../../../global/helpers/messageSummary';
+import { selectChat, selectUser } from '../../../../global/selectors';
 import getMessageIdsForSelectedText from '../../../../util/getMessageIdsForSelectedText';
 import * as mediaLoader from '../../../../util/mediaLoader';
 import {
   blobToBase64,
-  CLIPBOARD_ITEM_SUPPORTED,
   convertToBlob,
   sendMessageToParentWindow,
 } from '../../../../util/onlik-bridge';
@@ -38,12 +42,18 @@ export function getMessageSendToParentWindowOptions(
   const text = getMessageText(message);
   const photo = getMessagePhoto(message)
     || (!getMessageWebPageVideo(message) ? getMessageWebPagePhoto(message) : undefined);
+  const document = getMessageDocument(message);
   const mediaHash = photo ? getPhotoMediaHash(photo, 'inline') : undefined;
-  const canImageBeCopied = canCopy && photo && (mediaHash || hasMediaLocalBlobUrl(photo))
-    && CLIPBOARD_ITEM_SUPPORTED && !IS_SAFARI;
+  const documentMediaHash = document ? getDocumentMediaHash(document, 'full') : undefined;
+  const canImageBeCopied = canCopy && photo && (mediaHash || hasMediaLocalBlobUrl(photo)) && !IS_SAFARI;
   const selection = window.getSelection();
+  const global = getGlobal();
+  const chat = selectChat(global, message.chatId);
+  const user = global.currentUserId ? selectUser(getGlobal(), global.currentUserId) : undefined;
+  // eslint-disable-next-line max-len
+  const canDocumentBeCopied = canCopy && document && (documentMediaHash || hasMediaLocalBlobUrl(document)) && !IS_SAFARI;
 
-  if (canImageBeCopied && canCopy && text) {
+  if ((canDocumentBeCopied || canImageBeCopied) && canCopy && text) {
     // Detect if the user has selection in the current message
     const hasSelection = Boolean((
       selection?.anchorNode?.parentNode
@@ -70,25 +80,33 @@ export function getMessageSendToParentWindowOptions(
           }
         }
         const ntext = getText();
-        Promise.resolve(mediaHash ? mediaLoader.fetch(mediaHash, ApiMediaFormat.BlobUrl) : photo!.blobUrl)
+        const hash = documentMediaHash || mediaHash;
+        Promise.resolve(hash ? mediaLoader.fetch(hash, ApiMediaFormat.BlobUrl) : photo!.blobUrl)
           .then(convertToBlob)
           .then(blobToBase64)
-          .then((image) => sendMessageToParentWindow({ image, text: ntext, message }));
+          .then((image) => sendMessageToParentWindow({
+            image,
+            text: ntext,
+            message,
+            chat,
+            user
+          }));
 
         afterEffect?.();
       },
     });
   }
 
-  if (canImageBeCopied) {
+  if (canImageBeCopied || canDocumentBeCopied) {
     options.push({
       label: 'Отправить картинку',
       icon: 'copy-media',
       handler: () => {
-        Promise.resolve(mediaHash ? mediaLoader.fetch(mediaHash, ApiMediaFormat.BlobUrl) : photo!.blobUrl)
+        const hash = documentMediaHash || mediaHash;
+        Promise.resolve(hash ? mediaLoader.fetch(hash, ApiMediaFormat.BlobUrl) : photo!.blobUrl)
           .then(convertToBlob)
           .then(blobToBase64)
-          .then((image) => sendMessageToParentWindow({ image, message }));
+          .then((image) => sendMessageToParentWindow({ image, message, chat, user }));
 
         afterEffect?.();
       },
@@ -116,11 +134,15 @@ export function getMessageSendToParentWindowOptions(
             // @ts-ignore
             text: selection.toString()!,
             message,
+            chat,
+            user
           });
         } else {
           sendMessageToParentWindow({
             text: getMessageTextWithSpoilers(message)!,
             message,
+            chat,
+            user
           });
         }
 
@@ -128,7 +150,6 @@ export function getMessageSendToParentWindowOptions(
       },
     });
   }
-
   return options;
 }
 function checkMessageHasSelection(message: ApiMessage): boolean {
