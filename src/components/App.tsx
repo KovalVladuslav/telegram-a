@@ -1,5 +1,5 @@
 import type { FC } from '../lib/teact/teact';
-import React, { useEffect, useLayoutEffect } from '../lib/teact/teact';
+import React, { useEffect, useLayoutEffect, useState } from '../lib/teact/teact';
 import { getActions, withGlobal } from '../global';
 
 import type { GlobalState } from '../global/types';
@@ -31,6 +31,7 @@ import Main from './main/Main.async';
 import Transition from './ui/Transition';
 
 import styles from './App.module.scss';
+import Login from './Login';
 
 type StateProps = {
   authState: GlobalState['authState'];
@@ -181,6 +182,21 @@ const App: FC<StateProps> = ({
   }, [isInactiveAuth, markInactive, unmarkInactive]);
 
   const prevActiveKey = usePreviousDeprecated(activeKey);
+
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  useEffect(() => {
+    const loggedInStatus = localStorage.getItem('isLoggedIn');
+    setIsLoggedIn(loggedInStatus === 'true');
+  }, []);
+
+  const handleLogin = () => {
+    setIsLoggedIn(true);
+  };
+
+  if (!isLoggedIn) {
+    return <Login onLogin={handleLogin} />;
+  }
 
   // eslint-disable-next-line consistent-return
   function renderContent() {
