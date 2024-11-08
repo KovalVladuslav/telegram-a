@@ -184,10 +184,12 @@ const App: FC<StateProps> = ({
   const prevActiveKey = usePreviousDeprecated(activeKey);
 
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isLoaded, setIsLoaded] = useState(false);
 
   useEffect(() => {
     const loggedInStatus = localStorage.getItem('isLoggedIn');
     setIsLoggedIn(loggedInStatus === 'true');
+    setIsLoaded(true);
   }, []);
 
   const handleLogin = () => {
@@ -195,7 +197,7 @@ const App: FC<StateProps> = ({
   };
 
   if (!isLoggedIn) {
-    return <Login onLogin={handleLogin} />;
+    return <Login onLogin={handleLogin} isLoaded={isLoaded} />;
   }
 
   // eslint-disable-next-line consistent-return
