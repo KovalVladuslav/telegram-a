@@ -26,7 +26,7 @@ const Login: FC<LoginProps> = ({ onLogin }) => {
   return (
     <div className={styles.container}>
       <div className={styles.loginBox}>
-        <p>This is not an official version of Telegram. If you agree to continue, please enter the code 123:</p>
+      <h1 className={styles.title}>This is not an official version of Telegram. If you agree to continue, please enter the code 123:</h1>
         {error && <p className={styles.error}>{error}</p>}
         <input
           type="number"
