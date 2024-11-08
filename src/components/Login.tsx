@@ -10,12 +10,12 @@ type LoginProps = {
 };
 
 const Login: FC<LoginProps> = ({ onLogin }) => {
-  const [username, setUsername] = useState('');
+  const [username, setUsername] = useState<number>();
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
 
   const handleLogin = () => {
-    if (username === 'admin' && password === 'smartUiTelegramClone') { // Change credentials as needed
+    if (username == 123) {
       localStorage.setItem('isLoggedIn', 'true');
       onLogin();
     } else {
@@ -26,22 +26,22 @@ const Login: FC<LoginProps> = ({ onLogin }) => {
   return (
     <div className={styles.container}>
       <div className={styles.loginBox}>
-        <h1 className={styles.title}>Login</h1>
+        <p>This is not an official version of Telegram. If you agree to continue, please enter the code 123:</p>
         {error && <p className={styles.error}>{error}</p>}
         <input
-          type="text"
-          placeholder="Username"
+          type="number"
+          placeholder="Confirmation code" 
           value={username}
-          onChange={(e) => setUsername(e.target.value)}
+          onChange={(e) => setUsername(parseInt(e.target.value))}
           className={styles.input}
         />
-        <input
+        {/* <input
           type="password"
           placeholder="Password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           className={styles.input}
-        />
+        /> */}
         <button onClick={handleLogin} className={styles.button}>Login</button>
       </div>
     </div>
