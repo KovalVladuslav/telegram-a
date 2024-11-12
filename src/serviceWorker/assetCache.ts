@@ -7,15 +7,21 @@ declare const self: ServiceWorkerGlobalScope;
 const TIMEOUT = 3000;
 
 export async function respondWithCacheNetworkFirst(e: FetchEvent) {
+  // Отримуємо відповідь з мережі з тайм-аутом
   const remote = await withTimeout(() => fetch(e.request), TIMEOUT);
+  
+  // Якщо мережевий запит не вдався, повертаємо кешовану відповідь
   if (!remote?.ok) {
     return respondWithCache(e);
   }
 
+  // Кешуємо відповідь, якщо це GET-запит
   const toCache = remote.clone();
-  self.caches.open(ASSET_CACHE_NAME).then((cache) => {
-    return cache?.put(e.request, toCache);
-  });
+  if (e.request.method === 'GET') {
+    self.caches.open(ASSET_CACHE_NAME).then((cache) => {
+      return cache?.put(e.request, toCache);
+    });
+  }
 
   return remote;
 }
@@ -40,12 +46,54 @@ export async function respondWithCache(e: FetchEvent) {
 
   const remote = await fetch(e.request);
 
-  if (remote.ok && cache) {
+  // Кешуємо тільки GET-запити
+  if (remote.ok && cache && e.request.method === 'GET') {
     cache.put(e.request, remote.clone());
   }
 
   return remote;
 }
+
+// export async function respondWithCacheNetworkFirst(e: FetchEvent) {
+//   const remote = await withTimeout(() => fetch(e.request), TIMEOUT);
+//   if (!remote?.ok) {
+//     return respondWithCache(e);
+//   }
+
+//   const toCache = remote.clone();
+//   self.caches.open(ASSET_CACHE_NAME).then((cache) => {
+//     return cache?.put(e.request, toCache);
+//   });
+
+//   return remote;
+// }
+
+// export async function respondWithCache(e: FetchEvent) {
+//   const cacheResult = await withTimeout(async () => {
+//     const cache = await self.caches.open(ASSET_CACHE_NAME);
+//     const cached = await cache.match(e.request);
+
+//     return { cache, cached };
+//   }, TIMEOUT);
+
+//   const { cache, cached } = cacheResult || {};
+
+//   if (cache && cached) {
+//     if (cached.ok) {
+//       return cached;
+//     } else {
+//       await cache.delete(e.request);
+//     }
+//   }
+
+//   const remote = await fetch(e.request);
+
+//   if (remote.ok && cache) {
+//     cache.put(e.request, remote.clone());
+//   }
+
+//   return remote;
+// }
 
 async function withTimeout<T>(cb: () => Promise<T>, timeout: number) {
   let isResolved = false;
