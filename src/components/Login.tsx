@@ -23,8 +23,6 @@ const Login: FC<LoginProps> = ({ onLogin, isLoaded }) => {
     }
   };
 
-  console.log(isLoaded);
-
   if (!isLoaded) {
     return (
       <div className={styles.container}>
